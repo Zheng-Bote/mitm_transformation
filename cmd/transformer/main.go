@@ -34,13 +34,27 @@ type JobArgs struct {
 }
 
 func main() {
-	if len(os.Args) < 2 {
-		log.Fatalf("Usage: %s <db_config_json> [job_args_json]", os.Args[0])
-	}
-
 	var dbCfg DBConfig
-	if err := json.Unmarshal([]byte(os.Args[1]), &dbCfg); err != nil {
-		log.Fatalf("Failed to parse DB config from os.Args[1]: %v", err)
+	
+	// Read from ENV
+	dbCfg.Host = os.Getenv("MITM_DB_HOST")
+	if portStr := os.Getenv("MITM_DB_PORT"); portStr != "" {
+		fmt.Sscanf(portStr, "%d", &dbCfg.Port)
+	}
+	dbCfg.User = os.Getenv("MITM_DB_USER")
+	dbCfg.Password = os.Getenv("MITM_DB_PASSWORD")
+	dbCfg.Database = os.Getenv("MITM_DB_NAME")
+
+	if dbCfg.Host == "" {
+		// Fallback to JSON from ENV
+		jsonConfig := os.Getenv("MITM_DB_CONFIG_JSON")
+		if jsonConfig != "" {
+			if err := json.Unmarshal([]byte(jsonConfig), &dbCfg); err != nil {
+				log.Fatalf("Failed to parse DB config from MITM_DB_CONFIG_JSON: %v", err)
+			}
+		} else {
+			log.Fatal("MitM database credentials not found in environment (MITM_DB_HOST or MITM_DB_CONFIG_JSON)")
+		}
 	}
 
 	jobArgs := JobArgs{
@@ -49,9 +63,9 @@ func main() {
 		RetryFailed: false,
 	}
 
-	if len(os.Args) >= 3 {
-		if err := json.Unmarshal([]byte(os.Args[2]), &jobArgs); err != nil {
-			log.Printf("Warning: Failed to parse job arguments from os.Args[2]: %v", err)
+	if len(os.Args) >= 2 {
+		if err := json.Unmarshal([]byte(os.Args[1]), &jobArgs); err != nil {
+			log.Printf("Warning: Failed to parse job arguments from os.Args[1]: %v", err)
 		}
 	}
 
@@ -155,7 +169,7 @@ func worker(ctx context.Context, wg *sync.WaitGroup, jobs <-chan db.RawFragment,
 
 	for fragment := range jobs {
 		var payload map[string]interface{}
-		
+
 		if err := json.Unmarshal(fragment.Payload, &payload); err != nil {
 			dbErrs := []db.TransformationError{{
 				FailedField:  "payload",

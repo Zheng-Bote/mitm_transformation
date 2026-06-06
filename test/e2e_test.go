@@ -66,15 +66,15 @@ func setupDatabase(t *testing.T, pool *pgxpool.Pool) {
 			}
 		}
 	}
-    
-    _, err = pool.Exec(context.Background(), `
+
+	_, err = pool.Exec(context.Background(), `
         CREATE TABLE IF NOT EXISTS "test_topic" (
             id SERIAL PRIMARY KEY,
             "TargetEmail" JSONB,
             "TargetName" TEXT
         );
     `)
-    if err != nil {
+	if err != nil {
 		t.Fatalf("failed to create target table: %v", err)
 	}
 }
@@ -96,23 +96,33 @@ func TestE2EBatchJob(t *testing.T) {
 	// Insert mock rules
 	srcID := "00000000-0000-0000-0000-000000000001"
 	_, err = pool.Exec(context.Background(), `INSERT INTO mapping_source (id, name, type) VALUES ($1, 'test_topic', 'json')`, srcID)
-	if err != nil { t.Fatalf("insert source: %v", err) }
+	if err != nil {
+		t.Fatalf("insert source: %v", err)
+	}
 
 	tf1ID := "00000000-0000-0000-0000-000000000002"
 	_, err = pool.Exec(context.Background(), `INSERT INTO mapping_target_field (id, topic, field_name, data_type, is_required, encrypted) VALUES ($1, 'test_topic', 'TargetEmail', 'jsonb', true, true)`, tf1ID)
-	if err != nil { t.Fatalf("insert target field 1: %v", err) }
+	if err != nil {
+		t.Fatalf("insert target field 1: %v", err)
+	}
 
 	tf2ID := "00000000-0000-0000-0000-000000000003"
 	_, err = pool.Exec(context.Background(), `INSERT INTO mapping_target_field (id, topic, field_name, data_type, is_required, encrypted) VALUES ($1, 'test_topic', 'TargetName', 'text', true, false)`, tf2ID)
-	if err != nil { t.Fatalf("insert target field 2: %v", err) }
+	if err != nil {
+		t.Fatalf("insert target field 2: %v", err)
+	}
 
 	rule1ID := "00000000-0000-0000-0000-000000000004"
 	_, err = pool.Exec(context.Background(), `INSERT INTO mapping_rule (id, source_id, target_field_id, source_field, transformation_chain, validation_chain) VALUES ($1, $2, $3, 'raw_email', '[{"name": "trim_whitespace", "parameters": {}}]', '[{"name": "email", "parameters": {}}]')`, rule1ID, srcID, tf1ID)
-	if err != nil { t.Fatalf("insert rule 1: %v", err) }
+	if err != nil {
+		t.Fatalf("insert rule 1: %v", err)
+	}
 
 	rule2ID := "00000000-0000-0000-0000-000000000005"
 	_, err = pool.Exec(context.Background(), `INSERT INTO mapping_rule (id, source_id, target_field_id, source_field, transformation_chain, validation_chain) VALUES ($1, $2, $3, 'raw_name', null, '[{"name": "not_null", "parameters": {}}]')`, rule2ID, srcID, tf2ID)
-	if err != nil { t.Fatalf("insert rule 2: %v", err) }
+	if err != nil {
+		t.Fatalf("insert rule 2: %v", err)
+	}
 
 	// Insert Raw data
 	validPayload := []byte(`{"raw_email": " user@example.com ", "raw_name": "Alice"}`)
@@ -120,10 +130,14 @@ func TestE2EBatchJob(t *testing.T) {
 
 	var validID, invalidID string
 	err = pool.QueryRow(context.Background(), `INSERT INTO raw_ingestion (topic, payload, nonce, dek_id) VALUES ('test_topic', $1, '', '') RETURNING id::text`, validPayload).Scan(&validID)
-	if err != nil { t.Fatalf("insert valid raw: %v", err) }
-	
+	if err != nil {
+		t.Fatalf("insert valid raw: %v", err)
+	}
+
 	err = pool.QueryRow(context.Background(), `INSERT INTO raw_ingestion (topic, payload, nonce, dek_id) VALUES ('test_topic', $1, '', '') RETURNING id::text`, invalidPayload).Scan(&invalidID)
-	if err != nil { t.Fatalf("insert invalid raw: %v", err) }
+	if err != nil {
+		t.Fatalf("insert invalid raw: %v", err)
+	}
 
 	// Run CLI Transformer
 	dbCfgBytes, _ := json.Marshal(cfg)
@@ -166,21 +180,21 @@ func TestE2EBatchJob(t *testing.T) {
 		t.Errorf("expected 1 error in DLQ for invalid record, got %d", errCount)
 	}
 
-    // Test Retry Logic (--retry-failed)
-    fixedPayload := []byte(`{"raw_email": "bob@example.com", "raw_name": "Bob"}`)
-    pool.Exec(context.Background(), `UPDATE raw_ingestion SET payload = $1 WHERE id = $2`, fixedPayload, invalidID)
+	// Test Retry Logic (--retry-failed)
+	fixedPayload := []byte(`{"raw_email": "bob@example.com", "raw_name": "Bob"}`)
+	pool.Exec(context.Background(), `UPDATE raw_ingestion SET payload = $1 WHERE id = $2`, fixedPayload, invalidID)
 
-    retryJobArgsBytes, _ := json.Marshal(map[string]interface{}{"retry_failed": true, "workers": 2})
-    retryCmd := exec.Command("go", "run", "../cmd/transformer/main.go", string(dbCfgBytes), string(retryJobArgsBytes))
-    outRetry, errRetry := retryCmd.CombinedOutput()
+	retryJobArgsBytes, _ := json.Marshal(map[string]interface{}{"retry_failed": true, "workers": 2})
+	retryCmd := exec.Command("go", "run", "../cmd/transformer/main.go", string(dbCfgBytes), string(retryJobArgsBytes))
+	outRetry, errRetry := retryCmd.CombinedOutput()
 	if errRetry != nil {
 		t.Fatalf("cli retry run failed: %v\nOutput:\n%s", errRetry, string(outRetry))
 	}
-    t.Logf("CLI Retry Output: %s", string(outRetry))
+	t.Logf("CLI Retry Output: %s", string(outRetry))
 
-    // Check Bob is now processed
-    pool.QueryRow(context.Background(), `SELECT status FROM raw_ingestion WHERE id = $1`, invalidID).Scan(&invStatus)
-    if invStatus != "processed" {
+	// Check Bob is now processed
+	pool.QueryRow(context.Background(), `SELECT status FROM raw_ingestion WHERE id = $1`, invalidID).Scan(&invStatus)
+	if invStatus != "processed" {
 		t.Errorf("expected Bob record status 'processed' after retry, got '%s'", invStatus)
 	}
 }

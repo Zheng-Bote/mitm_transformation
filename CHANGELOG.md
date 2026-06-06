@@ -2,6 +2,11 @@
 
 All notable changes to the Transformation Layer will be documented in this file.
 
+## [v0.2.0] - 2026-06-06
+### Changed
+- Refactored database initialization to read from `MITM_DB_*` environment variables instead of `os.Args[1]` to match the updated scheduler convention.
+- Moved Job Arguments JSON from `os.Args[2]` to `os.Args[1]`.
+
 ## [v0.1.0] - 2026-06-06
 ### Added
 - **Repositories**: `MappingRepo` for rule caching, `IngestionRepo` for fetching/claiming raw records via `FOR UPDATE SKIP LOCKED`, and `TargetRepo` for transacting target writes and tracking errors.

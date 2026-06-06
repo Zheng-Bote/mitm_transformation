@@ -32,16 +32,16 @@ func TestProcessPayload(t *testing.T) {
 		},
 		Rules: []db.MappingRule{
 			{
-				SourceID:      "src-1",
-				TargetFieldID: "tf-1",
-				SourceField:   "FName",
+				SourceID:            "src-1",
+				TargetFieldID:       "tf-1",
+				SourceField:         "FName",
 				TransformationChain: json.RawMessage(`[{"name": "trim_whitespace", "parameters": {}}]`),
 				ValidationChain:     json.RawMessage(`[{"name": "not_null", "parameters": {}}]`),
 			},
 			{
-				SourceID:      "src-1",
-				TargetFieldID: "tf-2",
-				SourceField:   "Mail",
+				SourceID:            "src-1",
+				TargetFieldID:       "tf-2",
+				SourceField:         "Mail",
 				TransformationChain: json.RawMessage(`[{"name": "to_lower", "parameters": {}}]`),
 				ValidationChain:     json.RawMessage(`[{"name": "email", "parameters": {}}]`),
 			},
@@ -83,9 +83,9 @@ func TestProcessPayloadValidationError(t *testing.T) {
 		},
 		Rules: []db.MappingRule{
 			{
-				SourceID:      "src-1",
-				TargetFieldID: "tf-1",
-				SourceField:   "Mail",
+				SourceID:        "src-1",
+				TargetFieldID:   "tf-1",
+				SourceField:     "Mail",
 				ValidationChain: json.RawMessage(`[{"name": "email", "parameters": {}}]`),
 			},
 		},

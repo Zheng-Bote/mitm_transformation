@@ -148,7 +148,6 @@ func InList(val interface{}, params map[string]interface{}) (bool, error) {
 		return false, fmt.Errorf("'allowed' parameter must be a list")
 	}
 
-
 	for _, item := range allowedList {
 		if fmt.Sprintf("%v", item) == str {
 			return true, nil
