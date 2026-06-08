@@ -29,7 +29,7 @@ type RawFragment struct {
 	ID      string
 	Topic   string
 	Payload []byte
-	Nonce   string
+	Nonce   []byte
 	DekID   string
 }
 
