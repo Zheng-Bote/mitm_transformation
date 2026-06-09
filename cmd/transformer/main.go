@@ -13,6 +13,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"mitm_transformation/internal/crypto"
 	"mitm_transformation/internal/db"
 	"mitm_transformation/internal/engine"
 	"mitm_transformation/internal/engine/transform"
@@ -167,10 +168,39 @@ func worker(ctx context.Context, wg *sync.WaitGroup, jobs <-chan db.RawFragment,
 	// Simplified: Mock target key for AES-GCM target encryption
 	targetKey := []byte("0123456789abcdef0123456789abcdef")
 
+	// Fetch Master Key from Env (fallback to 32 bytes of zeros if not set - for dev)
+	masterKeyStr := os.Getenv("MASTER_KEY")
+	var masterKey []byte
+	if masterKeyStr == "" {
+		masterKey = make([]byte, 32)
+	} else {
+		masterKey = []byte(masterKeyStr)
+		if len(masterKey) > 32 {
+			masterKey = masterKey[:32]
+		} else if len(masterKey) < 32 {
+			padded := make([]byte, 32)
+			copy(padded, masterKey)
+			masterKey = padded
+		}
+	}
+
 	for fragment := range jobs {
 		var payload map[string]interface{}
 
-		if err := json.Unmarshal(fragment.Payload, &payload); err != nil {
+		// 1. Decrypt payload via Envelope Encryption
+		decryptedPayload, err := crypto.EnvelopeDecrypt(masterKey, fragment.WrappedKey, fragment.Nonce, fragment.Payload)
+		if err != nil {
+			dbErrs := []db.TransformationError{{
+				FailedField:  "payload",
+				RuleName:     "decryption",
+				ErrorMessage: fmt.Sprintf("Failed to decrypt envelope: %v", err),
+			}}
+			_ = targetRepo.WriteTargetAndComplete(context.Background(), fragment.ID, fragment.Topic, nil, dbErrs)
+			continue
+		}
+
+		// 2. Parse decrypted JSON
+		if err := json.Unmarshal(decryptedPayload, &payload); err != nil {
 			dbErrs := []db.TransformationError{{
 				FailedField:  "payload",
 				RuleName:     "json_parse",

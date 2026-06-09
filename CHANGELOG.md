@@ -2,6 +2,10 @@
 
 All notable changes to the Transformation Layer will be documented in this file.
 
+## [v0.4.0] - 2026-06-09
+### Fixed
+- **Envelope Encryption**: Fixed a critical bug where `raw_ingestion.payload` was not decrypted prior to `json.Unmarshal`. The Transformer worker now retrieves the `wrapped_key` via a SQL JOIN and uses `EnvelopeDecrypt` to securely parse incoming fragments.
+
 ## [v0.2.0] - 2026-06-06
 ### Changed
 - Refactored database initialization to read from `MITM_DB_*` environment variables instead of `os.Args[1]` to match the updated scheduler convention.

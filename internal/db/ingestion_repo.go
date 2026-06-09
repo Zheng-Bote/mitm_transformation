@@ -29,8 +29,9 @@ type RawFragment struct {
 	ID      string
 	Topic   string
 	Payload []byte
-	Nonce   []byte
-	DekID   string
+	Nonce      []byte
+	DekID      string
+	WrappedKey []byte
 }
 
 // IngestionRepo handles fetching and updating raw ingestion fragments.
@@ -61,7 +62,7 @@ func (r *IngestionRepo) ClaimPendingFragments(ctx context.Context, limit int, re
 			LIMIT $1 
 			FOR UPDATE SKIP LOCKED
 		)
-		RETURNING id::text, topic, payload, nonce, dek_id
+		RETURNING id::text, topic, payload, nonce, dek_id::text
 	`, statusFilter)
 
 	rows, err := r.pool.Query(ctx, query, limit)
@@ -76,6 +77,14 @@ func (r *IngestionRepo) ClaimPendingFragments(ctx context.Context, limit int, re
 		if err := rows.Scan(&f.ID, &f.Topic, &f.Payload, &f.Nonce, &f.DekID); err != nil {
 			return nil, err
 		}
+		
+		// Fetch wrapped key (in a real production app we'd probably JOIN this in a CTE or separate query,
+		// but since UPDATE RETURNING doesn't easily let us JOIN without CTE, we fetch it here).
+		err := r.pool.QueryRow(ctx, "SELECT wrapped_key FROM storage_keys WHERE id = $1", f.DekID).Scan(&f.WrappedKey)
+		if err != nil {
+			return nil, err
+		}
+		
 		fragments = append(fragments, f)
 	}
 	return fragments, rows.Err()
