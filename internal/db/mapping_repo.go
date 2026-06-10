@@ -31,6 +31,7 @@ type MappingSource struct {
 	ID      string
 	Name    string
 	Type    string
+	Topic   string
 	Version int
 }
 
@@ -115,7 +116,7 @@ func (r *MappingRepo) GetCachedRules() *RuleSet {
 }
 
 func (r *MappingRepo) fetchSources(ctx context.Context) (map[string]MappingSource, error) {
-	rows, err := r.pool.Query(ctx, "SELECT id::text, name, type, version FROM mapping_source")
+	rows, err := r.pool.Query(ctx, "SELECT id::text, name, type, topic, version FROM mapping_source")
 	if err != nil {
 		return nil, err
 	}
@@ -124,7 +125,7 @@ func (r *MappingRepo) fetchSources(ctx context.Context) (map[string]MappingSourc
 	sources := make(map[string]MappingSource)
 	for rows.Next() {
 		var s MappingSource
-		if err := rows.Scan(&s.ID, &s.Name, &s.Type, &s.Version); err != nil {
+		if err := rows.Scan(&s.ID, &s.Name, &s.Type, &s.Topic, &s.Version); err != nil {
 			return nil, err
 		}
 		sources[s.ID] = s

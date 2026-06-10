@@ -20,6 +20,7 @@ package engine
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"mitm_transformation/internal/crypto"
 	"mitm_transformation/internal/db"
 )
@@ -62,7 +63,15 @@ func (p *PipelineEngine) ProcessPayload(payload map[string]interface{}, sourceID
 			continue
 		}
 
-		val, exists := payload[rule.SourceField]
+		var val interface{}
+		var exists bool
+		for k, v := range payload {
+			if strings.EqualFold(k, rule.SourceField) {
+				val = v
+				exists = true
+				break
+			}
+		}
 		if !exists {
 			val = nil
 		}

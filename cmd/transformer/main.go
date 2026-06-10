@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -174,7 +175,12 @@ func worker(ctx context.Context, wg *sync.WaitGroup, jobs <-chan db.RawFragment,
 	if masterKeyStr == "" {
 		masterKey = make([]byte, 32)
 	} else {
-		masterKey = []byte(masterKeyStr)
+		decoded, err := base64.StdEncoding.DecodeString(masterKeyStr)
+		if err == nil {
+			masterKey = decoded
+		} else {
+			masterKey = []byte(masterKeyStr)
+		}
 		if len(masterKey) > 32 {
 			masterKey = masterKey[:32]
 		} else if len(masterKey) < 32 {
@@ -212,7 +218,7 @@ func worker(ctx context.Context, wg *sync.WaitGroup, jobs <-chan db.RawFragment,
 
 		sourceID := ""
 		for _, s := range ruleSet.Sources {
-			if s.Name == fragment.Topic {
+			if s.Topic == fragment.Topic {
 				sourceID = s.ID
 				break
 			}

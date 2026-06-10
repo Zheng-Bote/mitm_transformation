@@ -2,6 +2,13 @@
 
 All notable changes to the Transformation Layer will be documented in this file.
 
+## [v0.5.0] - 2026-06-10
+### Added
+- **Target Fragments Table**: Replaced dynamic target tables with a unified `target_fragments` table to store transformed payload JSON.
+
+### Fixed
+- **Case Sensitivity**: Fixed an issue where payload JSON key mapping failed because source systems provided differently cased fields than expected by the mapping rules. Mapping lookups are now case-insensitive.
+
 ## [v0.4.0] - 2026-06-09
 ### Fixed
 - **Envelope Encryption**: Fixed a critical bug where `raw_ingestion.payload` was not decrypted prior to `json.Unmarshal`. The Transformer worker now retrieves the `wrapped_key` via a SQL JOIN and uses `EnvelopeDecrypt` to securely parse incoming fragments.

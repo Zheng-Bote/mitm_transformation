@@ -20,7 +20,6 @@ package db
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -59,32 +58,21 @@ func (r *TargetRepo) WriteTargetAndComplete(ctx context.Context, fragmentID stri
 				return fmt.Errorf("failed to insert transformation error: %w", err)
 			}
 		}
-		_, err = tx.Exec(ctx, `UPDATE raw_ingestion SET status = 'failed_validation' WHERE id = $1`, fragmentID)
+		_, err = tx.Exec(ctx, `UPDATE raw_ingestion SET status = 'failed_validation', processed_at = NOW() WHERE id = $1`, fragmentID)
 		if err != nil {
 			return fmt.Errorf("failed to update raw_ingestion status: %w", err)
 		}
 	} else {
 		if len(data) > 0 {
-			var cols []string
-			var placeholders []string
-			var args []interface{}
-			i := 1
-			for k, v := range data {
-				cols = append(cols, fmt.Sprintf("%q", k)) // securely quote identifier
-				placeholders = append(placeholders, fmt.Sprintf("$%d", i))
-				args = append(args, v)
-				i++
-			}
-
-			// Generic insert into the table matching the topic name
-			query := fmt.Sprintf(`INSERT INTO %q (%s) VALUES (%s)`, topic, strings.Join(cols, ", "), strings.Join(placeholders, ", "))
-			_, err = tx.Exec(ctx, query, args...)
+			// Write JSON payload into generic target_fragments table
+			query := `INSERT INTO target_fragments (raw_ingestion_id, topic, payload_jsonb, delivery_status) VALUES ($1, $2, $3, 'PENDING')`
+			_, err = tx.Exec(ctx, query, fragmentID, topic, data)
 			if err != nil {
-				return fmt.Errorf("failed to insert into target table %s: %w", topic, err)
+				return fmt.Errorf("failed to insert into target_fragments: %w", err)
 			}
 		}
 
-		_, err = tx.Exec(ctx, `UPDATE raw_ingestion SET status = 'processed' WHERE id = $1`, fragmentID)
+		_, err = tx.Exec(ctx, `UPDATE raw_ingestion SET status = 'processed', processed_at = NOW() WHERE id = $1`, fragmentID)
 		if err != nil {
 			return fmt.Errorf("failed to update raw_ingestion status: %w", err)
 		}
