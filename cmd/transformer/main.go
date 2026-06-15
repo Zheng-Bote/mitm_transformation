@@ -6,8 +6,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net"
 	"os"
 	"os/signal"
+	"strconv"
 	"sync"
 	"syscall"
 	"time"
@@ -20,6 +22,41 @@ import (
 	"mitm_transformation/internal/engine/transform"
 	"mitm_transformation/internal/engine/validate"
 )
+
+var (
+	appName        = "Transformation Engine"
+	appDescription = "Applies mapping rules and transformations to data"
+	version        = "1.0.0"
+)
+
+// IPCClient is used to send events to the scheduler
+type IPCClient struct {
+	SocketPath string
+	RunID      int
+	Component  string
+}
+
+func (c *IPCClient) SendEvent(status, message string, progress int) {
+	if c == nil || c.SocketPath == "" {
+		return
+	}
+	conn, err := net.Dial("unix", c.SocketPath)
+	if err != nil {
+		log.Printf("[IPC ERROR] Failed to connect to scheduler socket: %v", err)
+		return
+	}
+	defer conn.Close()
+
+	event := map[string]interface{}{
+		"run_id":   c.RunID,
+		"type":     "status",
+		"status":   status,
+		"message":  message,
+		"progress": progress,
+	}
+	data, _ := json.Marshal(event)
+	_, _ = conn.Write(append(data, '\n'))
+}
 
 type DBConfig struct {
 	Host     string `json:"host"`
@@ -36,8 +73,24 @@ type JobArgs struct {
 }
 
 func main() {
+	var ipc *IPCClient
+	runIDStr := os.Getenv("RUN_ID")
+	socketPath := os.Getenv("SCHEDULER_SOCKET_PATH")
+	if runIDStr != "" && socketPath != "" {
+		runID, err := strconv.Atoi(runIDStr)
+		if err == nil {
+			ipc = &IPCClient{
+				SocketPath: socketPath,
+				RunID:      runID,
+				Component:  "mitm_transformation",
+			}
+		}
+	}
+
+	ipc.SendEvent("started", fmt.Sprintf("%s (%s) started", appName, version), 0)
+
 	var dbCfg DBConfig
-	
+
 	// Read from ENV
 	dbCfg.Host = os.Getenv("MITM_DB_HOST")
 	if portStr := os.Getenv("MITM_DB_PORT"); portStr != "" {

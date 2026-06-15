@@ -2,6 +2,11 @@
 
 All notable changes to the Transformation Layer will be documented in this file.
 
+## [v0.6.0] - 2026-06-15
+### Added
+- **Validators**: Added `min_length` and `max_length` validators to the transformation engine's validation library.
+- **Centralized App Info & IPC**: Added `appName` and `version` globally. The component now broadcasts its name and version via IPC when starting.
+
 ## [v0.5.0] - 2026-06-10
 ### Added
 - **Target Fragments Table**: Replaced dynamic target tables with a unified `target_fragments` table to store transformed payload JSON.

@@ -31,6 +31,8 @@ func RegisterAll(registry *engine.EngineRegistry) {
 	registry.RegisterValidate("range_check", RangeCheck)
 	registry.RegisterValidate("email", Email)
 	registry.RegisterValidate("in_list", InList)
+	registry.RegisterValidate("min_length", MinLength)
+	registry.RegisterValidate("max_length", MaxLength)
 }
 
 func NotNull(val interface{}, params map[string]interface{}) (bool, error) {
@@ -155,4 +157,60 @@ func InList(val interface{}, params map[string]interface{}) (bool, error) {
 	}
 
 	return false, fmt.Errorf("value %s is not in the allowed list", str)
+}
+
+func MinLength(val interface{}, params map[string]interface{}) (bool, error) {
+	str, ok := val.(string)
+	if !ok {
+		return false, fmt.Errorf("value is not a string")
+	}
+
+	lengthRaw, ok := params["length"]
+	if !ok {
+		return false, fmt.Errorf("missing 'length' parameter")
+	}
+
+	var minLen int
+	switch v := lengthRaw.(type) {
+	case int:
+		minLen = v
+	case float64:
+		minLen = int(v)
+	default:
+		return false, fmt.Errorf("'length' parameter must be a number")
+	}
+
+	if len(str) < minLen {
+		return false, fmt.Errorf("value length (%d) is less than minimum length (%d)", len(str), minLen)
+	}
+
+	return true, nil
+}
+
+func MaxLength(val interface{}, params map[string]interface{}) (bool, error) {
+	str, ok := val.(string)
+	if !ok {
+		return false, fmt.Errorf("value is not a string")
+	}
+
+	lengthRaw, ok := params["length"]
+	if !ok {
+		return false, fmt.Errorf("missing 'length' parameter")
+	}
+
+	var maxLen int
+	switch v := lengthRaw.(type) {
+	case int:
+		maxLen = v
+	case float64:
+		maxLen = int(v)
+	default:
+		return false, fmt.Errorf("'length' parameter must be a number")
+	}
+
+	if len(str) > maxLen {
+		return false, fmt.Errorf("value length (%d) is greater than maximum length (%d)", len(str), maxLen)
+	}
+
+	return true, nil
 }
