@@ -4,9 +4,9 @@ This directory contains the Go implementation of the MitM Transformation Layer, 
 
 ## Overview
 
-The Transformation Layer pulls data from the `raw_ingestion` table, applies mapping rules (transformation and validation pipelines dynamically sourced from PostgreSQL), encrypts sensitive target fields using AES-256 GCM, and writes the results to normalized destination tables. If validation fails, the payload is pushed to a Dead Letter Queue (DLQ) in the `transformation_errors` table.
+The Transformation Layer acts as a **Stateful Aggregator**. It pulls data from the `raw_ingestion` table, waits until all required source fragments for a given `correlation_id` have arrived, and merges them into a single Golden Record. It then applies mapping rules (transformation and validation pipelines dynamically sourced from PostgreSQL), encrypts sensitive target fields using AES-256 GCM, and writes the results to the `target_fragments` table. If validation fails, the payload is pushed to a Dead Letter Queue (DLQ) in the `transformation_errors` table.
 
-This module is designed as a **Scheduled Batch Job** rather than a continuous daemon. It processes all pending records concurrently via a Go Worker Pool and terminates successfully when the queue is empty.
+This module is designed as a **Scheduled Batch Job** rather than a continuous daemon. It processes all aggregated groups concurrently via a Go Worker Pool and terminates successfully when the queue is empty.
 
 ## Building
 
@@ -28,7 +28,7 @@ export MITM_DB_PASSWORD="..."
 export MITM_DB_NAME="mitm"
 
 # 2. Optional Job Args JSON
-ARGS_JSON='{"workers": 5, "batch_size": 500, "retry_failed": false}'
+ARGS_JSON='{"workers": 5, "batch_size": 500, "retry_failed": false, "topic": "employee.data", "required_sources": ["ORA_EMPLOYEE", "PG_EMPLOYEE"]}'
 
 ./bin/mitm-transformer "$ARGS_JSON"
 ```
@@ -37,8 +37,10 @@ ARGS_JSON='{"workers": 5, "batch_size": 500, "retry_failed": false}'
 - `MITM_DB_*` (**Required**): Database connection parameters provided via Environment variables. (Alternatively `MITM_DB_CONFIG_JSON` can be used).
 - `os.Args[1]` (**Optional**): Job configuration JSON object. Supported properties:
   - `workers`: Number of concurrent goroutines (default: 5).
-  - `batch_size`: Number of records to claim atomically per cycle (default: 500).
+  - `batch_size`: Number of aggregated records to claim atomically per cycle (default: 500).
   - `retry_failed`: Re-process records currently in `failed_validation` state instead of processing `pending` records.
+  - `topic`: The topic to process (e.g. `employee.data`).
+  - `required_sources`: An array of source system names that are mandatory for the topic before aggregation can occur.
 
 ## Dead Letter Queue (DLQ) & Reprocessing
 

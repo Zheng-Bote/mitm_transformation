@@ -46,6 +46,18 @@ func NewPipelineEngine(registry *EngineRegistry) *PipelineEngine {
 	return &PipelineEngine{registry: registry}
 }
 
+// MergePayloads merges multiple JSON object maps into a single Golden Record.
+// In case of key conflicts, the later payload's value overwrites the earlier.
+func MergePayloads(payloads ...map[string]interface{}) map[string]interface{} {
+	goldenRecord := make(map[string]interface{})
+	for _, payload := range payloads {
+		for key, value := range payload {
+			goldenRecord[key] = value
+		}
+	}
+	return goldenRecord
+}
+
 // ProcessPayload takes a decoded JSON payload and applies the rules for a specific source.
 // Target encryption is performed for fields where targetField.Encrypted is true.
 func (p *PipelineEngine) ProcessPayload(payload map[string]interface{}, sourceID string, ruleSet *db.RuleSet, targetKey []byte) (map[string]interface{}, []PipelineError) {

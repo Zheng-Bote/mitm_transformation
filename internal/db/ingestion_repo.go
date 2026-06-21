@@ -24,14 +24,21 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// RawFragment represents a single raw ingested record pending transformation.
+// RawFragment represents a single raw ingested record.
 type RawFragment struct {
-	ID      string
-	Topic   string
-	Payload []byte
+	ID         string
+	Topic      string
+	Payload    []byte
 	Nonce      []byte
 	DekID      string
 	WrappedKey []byte
+}
+
+// AggregatedFragment represents a set of fragments belonging to the same correlation ID.
+type AggregatedFragment struct {
+	CorrelationID string
+	Topic         string
+	Fragments     []RawFragment
 }
 
 // IngestionRepo handles fetching and updating raw ingestion fragments.
@@ -44,48 +51,82 @@ func NewIngestionRepo(pool *pgxpool.Pool) *IngestionRepo {
 	return &IngestionRepo{pool: pool}
 }
 
-// ClaimPendingFragments atomically retrieves a batch of pending records and sets their status to 'processing'.
-// This avoids locking the rows across long transactions and allows multiple workers to safely process batches.
-func (r *IngestionRepo) ClaimPendingFragments(ctx context.Context, limit int, retryFailed bool) ([]RawFragment, error) {
-	statusFilter := "pending"
-	if retryFailed {
-		statusFilter = "failed_validation"
+// ClaimAggregatedFragments retrieves correlation IDs that have all required sources and claims their fragments.
+func (r *IngestionRepo) ClaimAggregatedFragments(ctx context.Context, topic string, requiredSources []string, limit int) ([]AggregatedFragment, error) {
+	if len(requiredSources) == 0 {
+		return nil, fmt.Errorf("requiredSources cannot be empty")
 	}
 
-	query := fmt.Sprintf(`
-		UPDATE raw_ingestion 
-		SET status = 'processing' 
-		WHERE id IN (
-			SELECT id FROM raw_ingestion 
-			WHERE status = '%s' 
-			ORDER BY created_at ASC 
-			LIMIT $1 
-			FOR UPDATE SKIP LOCKED
-		)
-		RETURNING id::text, topic, payload, nonce, dek_id::text
-	`, statusFilter)
-
-	rows, err := r.pool.Query(ctx, query, limit)
+	// 1. Find Correlation IDs that have all required sources
+	queryFind := `
+		SELECT correlation_id
+		FROM raw_ingestion
+		WHERE topic = $1 AND status = 'pending' AND correlation_id IS NOT NULL
+		GROUP BY correlation_id
+		HAVING COUNT(DISTINCT source_system) >= $2
+		LIMIT $3
+	`
+	rows, err := r.pool.Query(ctx, queryFind, topic, len(requiredSources), limit)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 
-	var fragments []RawFragment
+	var correlationIDs []string
 	for rows.Next() {
-		var f RawFragment
-		if err := rows.Scan(&f.ID, &f.Topic, &f.Payload, &f.Nonce, &f.DekID); err != nil {
+		var cid string
+		if err := rows.Scan(&cid); err != nil {
+			rows.Close()
 			return nil, err
 		}
-		
-		// Fetch wrapped key (in a real production app we'd probably JOIN this in a CTE or separate query,
-		// but since UPDATE RETURNING doesn't easily let us JOIN without CTE, we fetch it here).
+		correlationIDs = append(correlationIDs, cid)
+	}
+	rows.Close()
+
+	if len(correlationIDs) == 0 {
+		return nil, nil // Nothing ready to be aggregated
+	}
+
+	// 2. Claim the actual fragments
+	queryClaim := `
+		UPDATE raw_ingestion
+		SET status = 'processing', processed_at = NOW()
+		WHERE correlation_id = ANY($1) AND topic = $2 AND status = 'pending'
+		RETURNING id::text, topic, correlation_id::text, payload, nonce, dek_id::text
+	`
+	claimRows, err := r.pool.Query(ctx, queryClaim, correlationIDs, topic)
+	if err != nil {
+		return nil, err
+	}
+	defer claimRows.Close()
+
+	aggMap := make(map[string]*AggregatedFragment)
+
+	for claimRows.Next() {
+		var f RawFragment
+		var cid string
+		if err := claimRows.Scan(&f.ID, &f.Topic, &cid, &f.Payload, &f.Nonce, &f.DekID); err != nil {
+			return nil, err
+		}
+
 		err := r.pool.QueryRow(ctx, "SELECT wrapped_key FROM storage_keys WHERE id = $1", f.DekID).Scan(&f.WrappedKey)
 		if err != nil {
 			return nil, err
 		}
-		
-		fragments = append(fragments, f)
+
+		if _, exists := aggMap[cid]; !exists {
+			aggMap[cid] = &AggregatedFragment{
+				CorrelationID: cid,
+				Topic:         topic,
+				Fragments:     []RawFragment{},
+			}
+		}
+		aggMap[cid].Fragments = append(aggMap[cid].Fragments, f)
 	}
-	return fragments, rows.Err()
+
+	var results []AggregatedFragment
+	for _, agg := range aggMap {
+		results = append(results, *agg)
+	}
+
+	return results, claimRows.Err()
 }

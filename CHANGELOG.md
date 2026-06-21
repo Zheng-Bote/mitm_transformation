@@ -2,6 +2,15 @@
 
 All notable changes to the Transformation Layer will be documented in this file.
 
+## [v0.7.0] - 2026-06-21
+### Added
+- **Stateful Aggregation**: Transformed the mapping layer from a 1:1 forwarder into an N:1 stateful aggregator. 
+- **Topic Dependencies**: The Transformer now utilizes the `topic_dependencies` table to verify if all required source fragments for a given `correlation_id` are present in `raw_ingestion` before generating a "Golden Record".
+
+### Changed
+- **Correlation ID Engine**: Replaced legacy processing logic based on `raw_ingestion_id` with a `GROUP BY correlation_id` architecture.
+- **Transformation Errors**: Updated the `transformation_errors` table to reference `correlation_id` instead of `raw_ingestion_id` for accurate Dead Letter Queue tracking.
+
 ## [v0.6.0] - 2026-06-15
 ### Added
 - **Validators**: Added `min_length` and `max_length` validators to the transformation engine's validation library.

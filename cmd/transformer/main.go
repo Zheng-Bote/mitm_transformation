@@ -67,9 +67,11 @@ type DBConfig struct {
 }
 
 type JobArgs struct {
-	BatchSize   int  `json:"batch_size"`
-	Workers     int  `json:"workers"`
-	RetryFailed bool `json:"retry_failed"`
+	BatchSize       int      `json:"batch_size"`
+	Workers         int      `json:"workers"`
+	RetryFailed     bool     `json:"retry_failed"`
+	Topic           string   `json:"topic"`
+	RequiredSources []string `json:"required_sources"`
 }
 
 func main() {
@@ -130,6 +132,12 @@ func main() {
 	if jobArgs.Workers <= 0 {
 		jobArgs.Workers = 5
 	}
+	if jobArgs.Topic == "" {
+		jobArgs.Topic = "employee.data"
+	}
+	if len(jobArgs.RequiredSources) == 0 {
+		jobArgs.RequiredSources = []string{"ORA_EMPLOYEE"}
+	}
 
 	// 1. Connect to Database
 	connString := fmt.Sprintf("postgres://%s:%s@%s:%d/%s", dbCfg.User, dbCfg.Password, dbCfg.Host, dbCfg.Port, dbCfg.Database)
@@ -170,7 +178,7 @@ func main() {
 	log.Printf("Starting Transformation Batch Job (Workers: %d, Batch Size: %d, Retry Failed: %t)...", jobArgs.Workers, jobArgs.BatchSize, jobArgs.RetryFailed)
 
 	// 3. Worker Pool Setup
-	jobs := make(chan db.RawFragment, jobArgs.BatchSize)
+	jobs := make(chan db.AggregatedFragment, jobArgs.BatchSize)
 	var wg sync.WaitGroup
 
 	// Start workers
@@ -188,9 +196,9 @@ dispatcherLoop:
 			break dispatcherLoop
 		}
 
-		fragments, err := ingestionRepo.ClaimPendingFragments(ctx, jobArgs.BatchSize, jobArgs.RetryFailed)
+		fragments, err := ingestionRepo.ClaimAggregatedFragments(ctx, jobArgs.Topic, jobArgs.RequiredSources, jobArgs.BatchSize)
 		if err != nil {
-			log.Printf("Error claiming fragments: %v", err)
+			log.Printf("Error claiming aggregated fragments: %v", err)
 			time.Sleep(2 * time.Second)
 			continue
 		}
@@ -216,7 +224,7 @@ dispatcherLoop:
 	log.Printf("Transformation Batch Job finished successfully. Processed %d records.", totalProcessed)
 }
 
-func worker(ctx context.Context, wg *sync.WaitGroup, jobs <-chan db.RawFragment, pipeline *engine.PipelineEngine, targetRepo *db.TargetRepo, ruleSet *db.RuleSet) {
+func worker(ctx context.Context, wg *sync.WaitGroup, jobs <-chan db.AggregatedFragment, pipeline *engine.PipelineEngine, targetRepo *db.TargetRepo, ruleSet *db.RuleSet) {
 	defer wg.Done()
 
 	// Simplified: Mock target key for AES-GCM target encryption
@@ -243,35 +251,46 @@ func worker(ctx context.Context, wg *sync.WaitGroup, jobs <-chan db.RawFragment,
 		}
 	}
 
-	for fragment := range jobs {
-		var payload map[string]interface{}
+	for aggFragment := range jobs {
+		var payloads []map[string]interface{}
+		var decryptionErrs []db.TransformationError
 
-		// 1. Decrypt payload via Envelope Encryption
-		decryptedPayload, err := crypto.EnvelopeDecrypt(masterKey, fragment.WrappedKey, fragment.Nonce, fragment.Payload)
-		if err != nil {
-			dbErrs := []db.TransformationError{{
-				FailedField:  "payload",
-				RuleName:     "decryption",
-				ErrorMessage: fmt.Sprintf("Failed to decrypt envelope: %v", err),
-			}}
-			_ = targetRepo.WriteTargetAndComplete(context.Background(), fragment.ID, fragment.Topic, nil, dbErrs)
+		for _, fragment := range aggFragment.Fragments {
+			// 1. Decrypt payload via Envelope Encryption
+			decryptedPayload, err := crypto.EnvelopeDecrypt(masterKey, fragment.WrappedKey, fragment.Nonce, fragment.Payload)
+			if err != nil {
+				decryptionErrs = append(decryptionErrs, db.TransformationError{
+					FailedField:  "payload",
+					RuleName:     "decryption",
+					ErrorMessage: fmt.Sprintf("Failed to decrypt envelope: %v", err),
+				})
+				continue
+			}
+
+			var payload map[string]interface{}
+			// 2. Parse decrypted JSON
+			if err := json.Unmarshal(decryptedPayload, &payload); err != nil {
+				decryptionErrs = append(decryptionErrs, db.TransformationError{
+					FailedField:  "payload",
+					RuleName:     "json_parse",
+					ErrorMessage: err.Error(),
+				})
+				continue
+			}
+			payloads = append(payloads, payload)
+		}
+
+		if len(decryptionErrs) > 0 {
+			_ = targetRepo.WriteTargetAndComplete(context.Background(), aggFragment.CorrelationID, aggFragment.Topic, nil, decryptionErrs)
 			continue
 		}
 
-		// 2. Parse decrypted JSON
-		if err := json.Unmarshal(decryptedPayload, &payload); err != nil {
-			dbErrs := []db.TransformationError{{
-				FailedField:  "payload",
-				RuleName:     "json_parse",
-				ErrorMessage: err.Error(),
-			}}
-			_ = targetRepo.WriteTargetAndComplete(context.Background(), fragment.ID, fragment.Topic, nil, dbErrs)
-			continue
-		}
+		// 3. Merge payloads into a Golden Record
+		goldenRecord := engine.MergePayloads(payloads...)
 
 		sourceID := ""
 		for _, s := range ruleSet.Sources {
-			if s.Topic == fragment.Topic {
+			if s.Topic == aggFragment.Topic {
 				sourceID = s.ID
 				break
 			}
@@ -279,11 +298,11 @@ func worker(ctx context.Context, wg *sync.WaitGroup, jobs <-chan db.RawFragment,
 
 		if sourceID == "" {
 			dbErrs := []db.TransformationError{{FailedField: "topic", RuleName: "source_lookup", ErrorMessage: "No mapping source found for topic"}}
-			_ = targetRepo.WriteTargetAndComplete(context.Background(), fragment.ID, fragment.Topic, nil, dbErrs)
+			_ = targetRepo.WriteTargetAndComplete(context.Background(), aggFragment.CorrelationID, aggFragment.Topic, nil, dbErrs)
 			continue
 		}
 
-		targetData, pipelineErrs := pipeline.ProcessPayload(payload, sourceID, ruleSet, targetKey)
+		targetData, pipelineErrs := pipeline.ProcessPayload(goldenRecord, sourceID, ruleSet, targetKey)
 
 		var dbErrs []db.TransformationError
 		for _, pe := range pipelineErrs {
@@ -294,8 +313,8 @@ func worker(ctx context.Context, wg *sync.WaitGroup, jobs <-chan db.RawFragment,
 			})
 		}
 
-		if err := targetRepo.WriteTargetAndComplete(context.Background(), fragment.ID, fragment.Topic, targetData, dbErrs); err != nil {
-			log.Printf("Failed to write target for fragment %s: %v", fragment.ID, err)
+		if err := targetRepo.WriteTargetAndComplete(context.Background(), aggFragment.CorrelationID, aggFragment.Topic, targetData, dbErrs); err != nil {
+			log.Printf("Failed to write target for correlation %s: %v", aggFragment.CorrelationID, err)
 		}
 	}
 }
