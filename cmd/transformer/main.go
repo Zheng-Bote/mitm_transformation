@@ -199,6 +199,39 @@ func main() {
 
 	log.Printf("Starting Transformation Batch Job (Topic: %s, Required Sources: %v, Workers: %d, Batch Size: %d, Retry Failed: %t)...", jobArgs.Topic, jobArgs.RequiredSources, jobArgs.Workers, jobArgs.BatchSize, jobArgs.RetryFailed)
 
+	var wrappedKey []byte
+	query := `
+		SELECT sk.wrapped_key
+		FROM delivery_targets dt
+		JOIN storage_keys sk ON dt.dek_id = sk.id
+		WHERE LOWER(dt.topic) = LOWER($1) AND dt.is_active = true
+		LIMIT 1
+	`
+	if err := pool.QueryRow(context.Background(), query, jobArgs.Topic).Scan(&wrappedKey); err != nil {
+		log.Printf("Warning: Failed to fetch wrapped key for topic %s: %v", jobArgs.Topic, err)
+		// Provide a fallback dummy wrapped key to avoid panics if not configured yet
+		masterKeyStr := os.Getenv("MASTER_KEY")
+		var masterKey []byte
+		if masterKeyStr == "" {
+			masterKey = make([]byte, 32)
+		} else {
+			decoded, err := base64.StdEncoding.DecodeString(masterKeyStr)
+			if err == nil {
+				masterKey = decoded
+			} else {
+				masterKey = []byte(masterKeyStr)
+			}
+			if len(masterKey) > 32 {
+				masterKey = masterKey[:32]
+			} else if len(masterKey) < 32 {
+				padded := make([]byte, 32)
+				copy(padded, masterKey)
+				masterKey = padded
+			}
+		}
+		wrappedKey, _ = crypto.GenerateWrappedDEK(masterKey)
+	}
+
 	// 3. Worker Pool Setup
 	jobs := make(chan db.AggregatedFragment, jobArgs.BatchSize)
 	var wg sync.WaitGroup
@@ -206,7 +239,7 @@ func main() {
 	// Start workers
 	for i := 0; i < jobArgs.Workers; i++ {
 		wg.Add(1)
-		go worker(ctx, &wg, jobs, pipeline, targetRepo, ruleSet)
+		go worker(ctx, &wg, jobs, pipeline, targetRepo, ruleSet, wrappedKey)
 	}
 
 	totalProcessed := 0
@@ -248,11 +281,8 @@ dispatcherLoop:
 	ipc.SendEvent("finished", fmt.Sprintf("Transformation Batch Job finished successfully. Processed %d records.", totalProcessed), 100)
 }
 
-func worker(ctx context.Context, wg *sync.WaitGroup, jobs <-chan db.AggregatedFragment, pipeline *engine.PipelineEngine, targetRepo *db.TargetRepo, ruleSet *db.RuleSet) {
+func worker(ctx context.Context, wg *sync.WaitGroup, jobs <-chan db.AggregatedFragment, pipeline *engine.PipelineEngine, targetRepo *db.TargetRepo, ruleSet *db.RuleSet, wrappedKey []byte) {
 	defer wg.Done()
-
-	// Simplified: Mock target key for AES-GCM target encryption
-	targetKey := []byte("0123456789abcdef0123456789abcdef")
 
 	// Fetch Master Key from Env (fallback to 32 bytes of zeros if not set - for dev)
 	masterKeyStr := os.Getenv("MASTER_KEY")
@@ -326,7 +356,7 @@ func worker(ctx context.Context, wg *sync.WaitGroup, jobs <-chan db.AggregatedFr
 			continue
 		}
 
-		targetData, pipelineErrs := pipeline.ProcessPayload(goldenRecord, sourceID, ruleSet, targetKey)
+		targetData, pipelineErrs := pipeline.ProcessPayload(goldenRecord, sourceID, ruleSet, masterKey, wrappedKey)
 
 		var dbErrs []db.TransformationError
 		for _, pe := range pipelineErrs {

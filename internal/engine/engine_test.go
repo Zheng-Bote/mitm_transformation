@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"mitm_transformation/internal/crypto"
 	"mitm_transformation/internal/db"
 	"mitm_transformation/internal/engine"
 	"mitm_transformation/internal/engine/transform"
@@ -22,8 +23,12 @@ func TestProcessPayload(t *testing.T) {
 	eng := setupTestEngine()
 
 	sourceID := "src-1"
-	targetKey := make([]byte, 32)
-	rand.Read(targetKey)
+	masterKey := make([]byte, 32)
+	rand.Read(masterKey)
+	wrappedKey, err := crypto.GenerateWrappedDEK(masterKey)
+	if err != nil {
+		t.Fatalf("failed to generate wrapped key: %v", err)
+	}
 
 	ruleSet := &db.RuleSet{
 		TargetFields: map[string]db.MappingTargetField{
@@ -53,7 +58,7 @@ func TestProcessPayload(t *testing.T) {
 		"Mail":  "TEST@EXAMPLE.COM",
 	}
 
-	result, errs := eng.ProcessPayload(payload, sourceID, ruleSet, targetKey)
+	result, errs := eng.ProcessPayload(payload, sourceID, ruleSet, masterKey, wrappedKey)
 	if len(errs) > 0 {
 		t.Fatalf("unexpected pipeline errors: %v", errs)
 	}
@@ -95,7 +100,10 @@ func TestProcessPayloadValidationError(t *testing.T) {
 		"Mail": "invalid-email",
 	}
 
-	result, errs := eng.ProcessPayload(payload, sourceID, ruleSet, nil)
+	masterKey := make([]byte, 32)
+	wrappedKey := make([]byte, 32)
+
+	result, errs := eng.ProcessPayload(payload, sourceID, ruleSet, masterKey, wrappedKey)
 	if len(errs) != 1 {
 		t.Fatalf("expected 1 pipeline error, got %d", len(errs))
 	}

@@ -2,8 +2,15 @@
 
 All notable changes to the Transformation Layer will be documented in this file.
 
-## [v0.7.0] - 2026-06-21
+## [v0.8.0] - 2026-06-24
 ### Added
+- **True Envelope Encryption for Targets**: Replaced the static mock target key (`0123456789abcdef0123456789abcdef`) with a fully realized Envelope Encryption mechanism. The Transformer now securely queries `storage_keys` via `delivery_targets` to fetch the specific `wrapped_key` (DEK) for the current target topic, wrapping the encrypted JSON objects dynamically using the `MASTER_KEY` (KEK).
+- **Expanded Crypto Primitives**: Implemented `EnvelopeEncrypt` and `GenerateWrappedDEK` within `internal/crypto/aes.go`. These new functions securely bundle `ciphertext` and `nonce` into JSON structures matching the expected format of the Delivery Layer.
+
+### Fixed
+- **Testing Architecture**: Fixed unit and end-to-end testing payloads (`engine_test.go`) to generate cryptographically valid mock DEKs on-the-fly, ensuring `ProcessPayload` successfully evaluates the new Envelope Encryption pipeline without failing authentication checks.
+
+## [v0.7.0] - 2026-06-21
 - **Stateful Aggregation**: Transformed the mapping layer from a 1:1 forwarder into an N:1 stateful aggregator. 
 - **Topic Dependencies**: The Transformer now utilizes the `topic_dependencies` table to verify if all required source fragments for a given `correlation_id` are present in `raw_ingestion` before generating a "Golden Record".
 

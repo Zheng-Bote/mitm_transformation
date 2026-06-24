@@ -60,7 +60,7 @@ func MergePayloads(payloads ...map[string]interface{}) map[string]interface{} {
 
 // ProcessPayload takes a decoded JSON payload and applies the rules for a specific source.
 // Target encryption is performed for fields where targetField.Encrypted is true.
-func (p *PipelineEngine) ProcessPayload(payload map[string]interface{}, sourceID string, ruleSet *db.RuleSet, targetKey []byte) (map[string]interface{}, []PipelineError) {
+func (p *PipelineEngine) ProcessPayload(payload map[string]interface{}, sourceID string, ruleSet *db.RuleSet, masterKey []byte, wrappedKey []byte) (map[string]interface{}, []PipelineError) {
 	result := make(map[string]interface{})
 	var errors []PipelineError
 
@@ -117,7 +117,7 @@ func (p *PipelineEngine) ProcessPayload(payload map[string]interface{}, sourceID
 		// Encryption if needed
 		if targetField.Encrypted && transformedVal != nil && transformedVal != "" {
 			strVal := fmt.Sprintf("%v", transformedVal)
-			ciphertext, nonce, encErr := crypto.Encrypt(targetKey, []byte(strVal))
+			ciphertext, nonce, encErr := crypto.EnvelopeEncrypt(masterKey, wrappedKey, []byte(strVal))
 			if encErr != nil {
 				errors = append(errors, PipelineError{
 					FailedField:  rule.SourceField,

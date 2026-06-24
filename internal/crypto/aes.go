@@ -108,3 +108,83 @@ func EnvelopeDecrypt(kek []byte, wrappedKey []byte, payloadNonce []byte, payload
 	}
 	return dekGCM.Open(nil, payloadNonce, payload, nil)
 }
+
+// EnvelopeEncrypt encrypts a payload using a wrapped DEK and a KEK. Returns encrypted payload and new nonce.
+func EnvelopeEncrypt(kek []byte, wrappedKey []byte, plaintext []byte) ([]byte, []byte, error) {
+	if len(kek) != 32 {
+		adjusted := make([]byte, 32)
+		copy(adjusted, kek)
+		kek = adjusted
+	}
+
+	if len(wrappedKey) < 12 {
+		return nil, nil, fmt.Errorf("wrapped DEK too short")
+	}
+	dekNonce := wrappedKey[:12]
+	wrappedCipher := wrappedKey[12:]
+
+	kekBlock, err := aes.NewCipher(kek)
+	if err != nil {
+		return nil, nil, err
+	}
+	kekGCM, err := cipher.NewGCM(kekBlock)
+	if err != nil {
+		return nil, nil, err
+	}
+	dek, err := kekGCM.Open(nil, dekNonce, wrappedCipher, nil)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to decrypt DEK: %w", err)
+	}
+
+	dekBlock, err := aes.NewCipher(dek)
+	if err != nil {
+		return nil, nil, err
+	}
+	dekGCM, err := cipher.NewGCM(dekBlock)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	payloadNonce := make([]byte, 12)
+	if _, err := io.ReadFull(rand.Reader, payloadNonce); err != nil {
+		return nil, nil, err
+	}
+
+	ciphertext := dekGCM.Seal(nil, payloadNonce, plaintext, nil)
+	return ciphertext, payloadNonce, nil
+}
+
+// GenerateWrappedDEK generates a new random 32-byte DEK and wraps it with the provided KEK
+func GenerateWrappedDEK(kek []byte) ([]byte, error) {
+	if len(kek) != 32 {
+		adjusted := make([]byte, 32)
+		copy(adjusted, kek)
+		kek = adjusted
+	}
+
+	dek := make([]byte, 32)
+	if _, err := io.ReadFull(rand.Reader, dek); err != nil {
+		return nil, err
+	}
+
+	dekNonce := make([]byte, 12)
+	if _, err := io.ReadFull(rand.Reader, dekNonce); err != nil {
+		return nil, err
+	}
+
+	kekBlock, err := aes.NewCipher(kek)
+	if err != nil {
+		return nil, err
+	}
+	kekGCM, err := cipher.NewGCM(kekBlock)
+	if err != nil {
+		return nil, err
+	}
+	wrappedCipher := kekGCM.Seal(nil, dekNonce, dek, nil)
+
+	wrappedKey := make([]byte, len(dekNonce)+len(wrappedCipher))
+	copy(wrappedKey, dekNonce)
+	copy(wrappedKey[len(dekNonce):], wrappedCipher)
+
+	return wrappedKey, nil
+}
