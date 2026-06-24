@@ -153,6 +153,9 @@ func (p *PipelineEngine) applyTransformations(val interface{}, chainRaw json.Raw
 
 	currentVal := val
 	for _, step := range chain {
+		if step.Name == "" {
+			continue
+		}
 		fn, err := p.registry.GetTransform(step.Name)
 		if err != nil {
 			return nil, err
@@ -179,6 +182,9 @@ func (p *PipelineEngine) applyValidations(val interface{}, chainRaw json.RawMess
 	}
 
 	for _, step := range chain {
+		if step.Name == "" {
+			continue
+		}
 		fn, err := p.registry.GetValidate(step.Name)
 		if err != nil {
 			return false, err

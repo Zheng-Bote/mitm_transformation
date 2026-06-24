@@ -46,11 +46,10 @@ func NotNull(val interface{}, params map[string]interface{}) (bool, error) {
 }
 
 func RegexMatch(val interface{}, params map[string]interface{}) (bool, error) {
-	str, ok := val.(string)
-	if !ok {
-		// If it's not a string, we might fail or allow. Let's fail for regex.
-		return false, fmt.Errorf("value is not a string")
+	if val == nil || val == "" {
+		return true, nil
 	}
+	str := fmt.Sprintf("%v", val)
 
 	patternRaw, ok := params["pattern"]
 	if !ok {
@@ -73,6 +72,9 @@ func RegexMatch(val interface{}, params map[string]interface{}) (bool, error) {
 }
 
 func RangeCheck(val interface{}, params map[string]interface{}) (bool, error) {
+	if val == nil || val == "" {
+		return true, nil
+	}
 	var num float64
 	switch v := val.(type) {
 	case int:
@@ -122,10 +124,10 @@ func RangeCheck(val interface{}, params map[string]interface{}) (bool, error) {
 var emailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`)
 
 func Email(val interface{}, params map[string]interface{}) (bool, error) {
-	str, ok := val.(string)
-	if !ok {
-		return false, fmt.Errorf("value is not a string")
+	if val == nil || val == "" {
+		return true, nil
 	}
+	str := fmt.Sprintf("%v", val)
 
 	if !emailRegex.MatchString(str) {
 		return false, fmt.Errorf("value is not a valid email address")
@@ -135,10 +137,10 @@ func Email(val interface{}, params map[string]interface{}) (bool, error) {
 }
 
 func InList(val interface{}, params map[string]interface{}) (bool, error) {
-	str, ok := val.(string)
-	if !ok {
-		return false, fmt.Errorf("value is not a string")
+	if val == nil || val == "" {
+		return true, nil
 	}
+	str := fmt.Sprintf("%v", val)
 
 	allowedRaw, ok := params["allowed"]
 	if !ok {
@@ -160,10 +162,10 @@ func InList(val interface{}, params map[string]interface{}) (bool, error) {
 }
 
 func MinLength(val interface{}, params map[string]interface{}) (bool, error) {
-	str, ok := val.(string)
-	if !ok {
-		return false, fmt.Errorf("value is not a string")
+	if val == nil || val == "" {
+		return true, nil
 	}
+	str := fmt.Sprintf("%v", val)
 
 	lengthRaw, ok := params["length"]
 	if !ok {
@@ -188,10 +190,10 @@ func MinLength(val interface{}, params map[string]interface{}) (bool, error) {
 }
 
 func MaxLength(val interface{}, params map[string]interface{}) (bool, error) {
-	str, ok := val.(string)
-	if !ok {
-		return false, fmt.Errorf("value is not a string")
+	if val == nil || val == "" {
+		return true, nil
 	}
+	str := fmt.Sprintf("%v", val)
 
 	lengthRaw, ok := params["length"]
 	if !ok {

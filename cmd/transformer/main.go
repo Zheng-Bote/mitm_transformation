@@ -58,6 +58,27 @@ func (c *IPCClient) SendEvent(status, message string, progress int) {
 	_, _ = conn.Write(append(data, '\n'))
 }
 
+func (c *IPCClient) SendAudit(message string) {
+	if c == nil || c.SocketPath == "" {
+		return
+	}
+	conn, err := net.Dial("unix", c.SocketPath)
+	if err != nil {
+		log.Printf("[IPC ERROR] Failed to connect to scheduler socket: %v", err)
+		return
+	}
+	defer conn.Close()
+
+	event := map[string]interface{}{
+		"run_id":    c.RunID,
+		"type":      "audit",
+		"component": c.Component,
+		"message":   message,
+	}
+	data, _ := json.Marshal(event)
+	_, _ = conn.Write(append(data, '\n'))
+}
+
 type DBConfig struct {
 	Host     string `json:"host"`
 	Port     int    `json:"port"`
@@ -90,6 +111,7 @@ func main() {
 	}
 
 	ipc.SendEvent("started", fmt.Sprintf("%s (%s) started", appName, version), 0)
+	ipc.SendAudit(fmt.Sprintf("%s (%s) started", appName, version))
 
 	var dbCfg DBConfig
 
@@ -175,7 +197,7 @@ func main() {
 		cancel()
 	}()
 
-	log.Printf("Starting Transformation Batch Job (Workers: %d, Batch Size: %d, Retry Failed: %t)...", jobArgs.Workers, jobArgs.BatchSize, jobArgs.RetryFailed)
+	log.Printf("Starting Transformation Batch Job (Topic: %s, Required Sources: %v, Workers: %d, Batch Size: %d, Retry Failed: %t)...", jobArgs.Topic, jobArgs.RequiredSources, jobArgs.Workers, jobArgs.BatchSize, jobArgs.RetryFailed)
 
 	// 3. Worker Pool Setup
 	jobs := make(chan db.AggregatedFragment, jobArgs.BatchSize)
@@ -204,7 +226,7 @@ dispatcherLoop:
 		}
 
 		if len(fragments) == 0 {
-			log.Println("No more fragments to process. Batch job complete.")
+			log.Printf("No more fragments to process for Topic '%s' (Required Sources: %v). Batch job complete.", jobArgs.Topic, jobArgs.RequiredSources)
 			break dispatcherLoop
 		}
 
@@ -222,6 +244,8 @@ dispatcherLoop:
 	close(jobs)
 	wg.Wait()
 	log.Printf("Transformation Batch Job finished successfully. Processed %d records.", totalProcessed)
+	ipc.SendAudit(fmt.Sprintf("%s (%s) finished", appName, version))
+	ipc.SendEvent("finished", fmt.Sprintf("Transformation Batch Job finished successfully. Processed %d records.", totalProcessed), 100)
 }
 
 func worker(ctx context.Context, wg *sync.WaitGroup, jobs <-chan db.AggregatedFragment, pipeline *engine.PipelineEngine, targetRepo *db.TargetRepo, ruleSet *db.RuleSet) {
