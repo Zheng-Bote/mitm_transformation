@@ -20,7 +20,10 @@ go build -o bin/mitm-transformer ./cmd/transformer/main.go
 The batch job expects database credentials via environment variables and optional job configuration as a JSON argument (`os.Args[1]`), exactly as passed by the `mitm_scheduler`.
 
 ```bash
-# 1. DB Config Environment Variables
+# 1. DB Config via JSON (Preferred)
+export MITM_DB_CONFIG_JSON='{"db":{"host":"192.168.0.31","port":6543,"user":"mitm_user","password":"...","database":"mitm"}}'
+
+# Or via Direct Environment Variables (Fallback)
 export MITM_DB_HOST="192.168.0.31"
 export MITM_DB_PORT="6543"
 export MITM_DB_USER="mitm_user"
@@ -34,7 +37,8 @@ ARGS_JSON='{"workers": 5, "batch_size": 500, "retry_failed": false, "topic": "em
 ```
 
 ### Parameters
-- `MITM_DB_*` (**Required**): Database connection parameters provided via Environment variables. (Alternatively `MITM_DB_CONFIG_JSON` can be used).
+- `MITM_DB_CONFIG_JSON` (**Preferred**): A JSON string containing the database configuration nested under a `"db"` object.
+- `MITM_DB_*` (**Fallback**): Database connection parameters provided directly via Environment variables (`MITM_DB_HOST`, `MITM_DB_PORT`, etc.). Used if JSON is missing.
 - `os.Args[1]` (**Optional**): Job configuration JSON object. Supported properties:
   - `workers`: Number of concurrent goroutines (default: 5).
   - `batch_size`: Number of aggregated records to claim atomically per cycle (default: 500).

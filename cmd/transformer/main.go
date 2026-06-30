@@ -79,12 +79,16 @@ func (c *IPCClient) SendAudit(message string) {
 	_, _ = conn.Write(append(data, '\n'))
 }
 
-type DBConfig struct {
+type DBConnectionConfig struct {
 	Host     string `json:"host"`
 	Port     int    `json:"port"`
 	User     string `json:"user"`
 	Password string `json:"password"`
 	Database string `json:"database"`
+}
+
+type DBConfig struct {
+	DB DBConnectionConfig `json:"db"`
 }
 
 type JobArgs struct {
@@ -115,25 +119,31 @@ func main() {
 
 	var dbCfg DBConfig
 
-	// Read from ENV
-	dbCfg.Host = os.Getenv("MITM_DB_HOST")
-	if portStr := os.Getenv("MITM_DB_PORT"); portStr != "" {
-		fmt.Sscanf(portStr, "%d", &dbCfg.Port)
-	}
-	dbCfg.User = os.Getenv("MITM_DB_USER")
-	dbCfg.Password = os.Getenv("MITM_DB_PASSWORD")
-	dbCfg.Database = os.Getenv("MITM_DB_NAME")
-
-	if dbCfg.Host == "" {
-		// Fallback to JSON from ENV
-		jsonConfig := os.Getenv("MITM_DB_CONFIG_JSON")
-		if jsonConfig != "" {
-			if err := json.Unmarshal([]byte(jsonConfig), &dbCfg); err != nil {
-				log.Fatalf("Failed to parse DB config from MITM_DB_CONFIG_JSON: %v", err)
-			}
-		} else {
-			log.Fatal("MitM database credentials not found in environment (MITM_DB_HOST or MITM_DB_CONFIG_JSON)")
+	// Read DB configuration
+	configSource := "Environment Variables"
+	jsonConfig := os.Getenv("MITM_DB_CONFIG_JSON")
+	
+	if jsonConfig != "" {
+		if err := json.Unmarshal([]byte(jsonConfig), &dbCfg); err != nil {
+			log.Fatalf("Failed to parse DB config from MITM_DB_CONFIG_JSON: %v", err)
 		}
+		configSource = "JSON Config (MITM_DB_CONFIG_JSON)"
+	} else {
+		dbCfg.DB.Host = os.Getenv("MITM_DB_HOST")
+		if portStr := os.Getenv("MITM_DB_PORT"); portStr != "" {
+			fmt.Sscanf(portStr, "%d", &dbCfg.DB.Port)
+		}
+		dbCfg.DB.User = os.Getenv("MITM_DB_USER")
+		dbCfg.DB.Password = os.Getenv("MITM_DB_PASSWORD")
+		dbCfg.DB.Database = os.Getenv("MITM_DB_NAME")
+	}
+
+	if dbCfg.DB.Host == "" {
+		log.Fatal("MitM database credentials not found in environment (MITM_DB_HOST or MITM_DB_CONFIG_JSON)")
+	}
+
+	if ipc != nil {
+		ipc.SendAudit(fmt.Sprintf("Loaded database configuration from %s", configSource))
 	}
 
 	jobArgs := JobArgs{
@@ -162,7 +172,7 @@ func main() {
 	}
 
 	// 1. Connect to Database
-	connString := fmt.Sprintf("postgres://%s:%s@%s:%d/%s", dbCfg.User, dbCfg.Password, dbCfg.Host, dbCfg.Port, dbCfg.Database)
+	connString := fmt.Sprintf("postgres://%s:%s@%s:%d/%s", dbCfg.DB.User, dbCfg.DB.Password, dbCfg.DB.Host, dbCfg.DB.Port, dbCfg.DB.Database)
 	pool, err := pgxpool.New(context.Background(), connString)
 	if err != nil {
 		log.Fatalf("Unable to connect to database: %v\n", err)

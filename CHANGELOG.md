@@ -2,6 +2,12 @@
 
 All notable changes to the Transformation Layer will be documented in this file.
 
+## [v0.9.0] - 2026-06-30
+### Changed
+- **Config Restructuring**: Updated database configuration parsing to fully support the nested `"db"` object format provided via the `MITM_DB_CONFIG_JSON` environment variable.
+- **Database Connection**: The transformer now prioritizes the JSON configuration (`MITM_DB_CONFIG_JSON`) and only falls back to direct environment variables (`MITM_DB_HOST`, etc.) if the JSON is missing.
+- **Audit Logging**: Added comprehensive IPC audit logging (`ipc.SendAudit`) during initialization to explicitly log whether the database configuration was sourced from JSON or direct environment variables.
+
 ## [v0.8.0] - 2026-06-24
 ### Added
 - **True Envelope Encryption for Targets**: Replaced the static mock target key (`0123456789abcdef0123456789abcdef`) with a fully realized Envelope Encryption mechanism. The Transformer now securely queries `storage_keys` via `delivery_targets` to fetch the specific `wrapped_key` (DEK) for the current target topic, wrapping the encrypted JSON objects dynamically using the `MASTER_KEY` (KEK).
