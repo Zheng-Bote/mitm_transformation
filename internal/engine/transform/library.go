@@ -112,27 +112,57 @@ func ParseDate(val interface{}, params map[string]interface{}) (interface{}, err
 		return val, nil
 	}
 
-	inFormatRaw, ok := params["input_format"]
-	if !ok {
-		return val, fmt.Errorf("missing 'input_format' parameter")
-	}
-	inFormat, ok := inFormatRaw.(string)
-	if !ok {
-		return val, fmt.Errorf("'input_format' parameter must be a string")
+	var inFormat string
+	if params != nil {
+		if inFormatRaw, ok := params["input_format"]; ok {
+			inFormat, ok = inFormatRaw.(string)
+			if !ok {
+				return val, fmt.Errorf("'input_format' parameter must be a string")
+			}
+		}
 	}
 
 	outFormatRaw, ok := params["output_format"]
 	if !ok {
-		outFormatRaw = time.RFC3339
+		outFormatRaw = "2006-01-02"
 	}
 	outFormat, ok := outFormatRaw.(string)
 	if !ok {
 		return val, fmt.Errorf("'output_format' parameter must be a string")
 	}
 
-	parsedTime, err := time.Parse(inFormat, str)
-	if err != nil {
-		return val, fmt.Errorf("failed to parse date: %w", err)
+	var parsedTime time.Time
+	var err error
+
+	if inFormat != "" {
+		parsedTime, err = time.Parse(inFormat, str)
+		if err != nil {
+			return val, fmt.Errorf("failed to parse date: %w", err)
+		}
+	} else {
+		formats := []string{
+			"01/02/2006", // mm/dd/yyyy
+			"02/01/2006", // dd/mm/yyyy
+			"02-01-2006", // dd-mm-yyyy
+			"01-02-2006", // mm-dd-yyyy
+			"2006/01/02", // yyyy/mm/dd
+			"2006-01-02", // yyyy-mm-dd
+			"02.01.2006", // dd.mm.yyyy
+			"02.01.06",   // dd.mm.yy
+		}
+
+		parsed := false
+		for _, f := range formats {
+			parsedTime, err = time.Parse(f, str)
+			if err == nil {
+				parsed = true
+				break
+			}
+		}
+
+		if !parsed {
+			return val, fmt.Errorf("unsupported date format: %s", str)
+		}
 	}
 
 	return parsedTime.Format(outFormat), nil

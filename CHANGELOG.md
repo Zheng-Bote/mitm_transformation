@@ -2,6 +2,10 @@
 
 All notable changes to the Transformation Layer will be documented in this file.
 
+## [v0.10.0] - 2026-07-03
+### Added
+- **Date Conversion**: Enhanced the `parse_date` transformation function to support automatic date format detection (e.g., `dd.mm.yyyy`, `mm/dd/yyyy`). If `input_format` is not provided, it falls back to a predefined list of common formats and uses `yyyy-mm-dd` (`2006-01-02`) as the default `output_format`.
+
 ## [v0.9.0] - 2026-06-30
 ### Changed
 - **Config Restructuring**: Updated database configuration parsing to fully support the nested `"db"` object format provided via the `MITM_DB_CONFIG_JSON` environment variable.

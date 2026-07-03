@@ -53,16 +53,70 @@ func TestRegexReplace(t *testing.T) {
 }
 
 func TestParseDate(t *testing.T) {
-	params := map[string]interface{}{
-		"input_format":  "2006-01-02",
-		"output_format": time.RFC3339,
+	tests := []struct {
+		name        string
+		input       string
+		params      map[string]interface{}
+		expected    string
+		expectError bool
+	}{
+		{
+			name:  "Explicit input and output format",
+			input: "2026-06-06",
+			params: map[string]interface{}{
+				"input_format":  "2006-01-02",
+				"output_format": time.RFC3339,
+			},
+			expected: "2026-06-06T00:00:00Z",
+		},
+		{
+			name:     "Auto detect dd.mm.yyyy with default output",
+			input:    "12.03.1980",
+			params:   nil,
+			expected: "1980-03-12",
+		},
+		{
+			name:     "Auto detect mm/dd/yyyy with default output",
+			input:    "12/31/1980",
+			params:   nil,
+			expected: "1980-12-31",
+		},
+		{
+			name:     "Auto detect yyyy/mm/dd with default output",
+			input:    "1980/03/12",
+			params:   nil,
+			expected: "1980-03-12",
+		},
+		{
+			name:     "Auto detect yyyy-mm-dd with default output",
+			input:    "1980-03-12",
+			params:   nil,
+			expected: "1980-03-12",
+		},
+		{
+			name:        "Unsupported format",
+			input:       "invalid date",
+			params:      nil,
+			expectError: true,
+		},
 	}
-	val, err := transform.ParseDate("2026-06-06", params)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if val != "2026-06-06T00:00:00Z" {
-		t.Errorf("expected '2026-06-06T00:00:00Z', got '%v'", val)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			val, err := transform.ParseDate(tt.input, tt.params)
+			if tt.expectError {
+				if err == nil {
+					t.Fatalf("expected error, got none")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if val != tt.expected {
+				t.Errorf("expected '%v', got '%v'", tt.expected, val)
+			}
+		})
 	}
 }
 
