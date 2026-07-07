@@ -29,6 +29,7 @@ export MITM_DB_PORT="6543"
 export MITM_DB_USER="mitm_user"
 export MITM_DB_PASSWORD="..."
 export MITM_DB_NAME="mitm"
+export MITM_DB_SSLMODE="true"
 
 # 2. Optional Job Args JSON
 ARGS_JSON='{"workers": 5, "batch_size": 500, "retry_failed": false, "topic": "employee.data", "required_sources": ["ORA_EMPLOYEE", "PG_EMPLOYEE"]}'
@@ -39,6 +40,7 @@ ARGS_JSON='{"workers": 5, "batch_size": 500, "retry_failed": false, "topic": "em
 ### Parameters
 - `MITM_DB_CONFIG_JSON` (**Preferred**): A JSON string containing the database configuration nested under a `"db"` object.
 - `MITM_DB_*` (**Fallback**): Database connection parameters provided directly via Environment variables (`MITM_DB_HOST`, `MITM_DB_PORT`, etc.). Used if JSON is missing.
+- `MITM_DB_SSLMODE` (**Optional**): Set to `"true"` to enforce SSL connections (`sslmode=require`) to the MitM database.
 - `os.Args[1]` (**Optional**): Job configuration JSON object. Supported properties:
   - `workers`: Number of concurrent goroutines (default: 5).
   - `batch_size`: Number of aggregated records to claim atomically per cycle (default: 500).

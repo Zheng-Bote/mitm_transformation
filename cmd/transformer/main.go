@@ -172,7 +172,11 @@ func main() {
 	}
 
 	// 1. Connect to Database
-	connString := fmt.Sprintf("postgres://%s:%s@%s:%d/%s", dbCfg.DB.User, dbCfg.DB.Password, dbCfg.DB.Host, dbCfg.DB.Port, dbCfg.DB.Database)
+	sslMode := "disable"
+	if os.Getenv("MITM_DB_SSLMODE") == "true" {
+		sslMode = "require"
+	}
+	connString := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=%s", dbCfg.DB.User, dbCfg.DB.Password, dbCfg.DB.Host, dbCfg.DB.Port, dbCfg.DB.Database, sslMode)
 	pool, err := pgxpool.New(context.Background(), connString)
 	if err != nil {
 		log.Fatalf("Unable to connect to database: %v\n", err)
