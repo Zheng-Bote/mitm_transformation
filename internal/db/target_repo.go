@@ -61,7 +61,7 @@ func (r *TargetRepo) WriteTargetAndComplete(ctx context.Context, correlationID s
 		}
 	} else {
 		if len(data) > 0 {
-			query := `INSERT INTO target_fragments (raw_ingestion_id, topic, payload_jsonb, delivery_status) VALUES ($1, $2, $3, 'PENDING')`
+			query := `INSERT INTO target_fragments (correlation_id, topic, payload_jsonb, delivery_status) VALUES ($1, $2, $3, 'PENDING')`
 			_, err = tx.Exec(ctx, query, correlationID, topic, data)
 			if err != nil {
 				return fmt.Errorf("failed to insert into target_fragments: %w", err)

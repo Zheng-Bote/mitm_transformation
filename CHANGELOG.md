@@ -2,6 +2,10 @@
 
 All notable changes to the Transformation Layer will be documented in this file.
 
+## [v0.10.1] - 2026-07-08
+### Fixed
+- **Target Insertion Error**: Fixed an issue in `target_repo.go` where the `INSERT INTO target_fragments` statement incorrectly referenced the outdated `raw_ingestion_id` column instead of the correct `correlation_id` column.
+
 ## [v0.10.0] - 2026-07-07
 ### Added
 - **SSL Support**: Added support for the `MITM_DB_SSLMODE` environment variable. The transformation engine now respects this setting and applies it to the MitM PostgreSQL connection string.

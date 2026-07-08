@@ -122,7 +122,7 @@ func main() {
 	// Read DB configuration
 	configSource := "Environment Variables"
 	jsonConfig := os.Getenv("MITM_DB_CONFIG_JSON")
-	
+
 	if jsonConfig != "" {
 		if err := json.Unmarshal([]byte(jsonConfig), &dbCfg); err != nil {
 			log.Fatalf("Failed to parse DB config from MITM_DB_CONFIG_JSON: %v", err)
@@ -155,6 +155,7 @@ func main() {
 	if len(os.Args) >= 2 {
 		if err := json.Unmarshal([]byte(os.Args[1]), &jobArgs); err != nil {
 			log.Printf("Warning: Failed to parse job arguments from os.Args[1]: %v", err)
+			ipc.SendAudit(fmt.Sprintf("Warning: Failed to parse job arguments from os.Args[1]: %v", err))
 		}
 	}
 
@@ -179,6 +180,7 @@ func main() {
 	connString := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=%s", dbCfg.DB.User, dbCfg.DB.Password, dbCfg.DB.Host, dbCfg.DB.Port, dbCfg.DB.Database, sslMode)
 	pool, err := pgxpool.New(context.Background(), connString)
 	if err != nil {
+		ipc.SendAudit(fmt.Sprintf("Unable to connect to database: %v\n", err))
 		log.Fatalf("Unable to connect to database: %v\n", err)
 	}
 	defer pool.Close()
@@ -189,6 +191,7 @@ func main() {
 	targetRepo := db.NewTargetRepo(pool)
 
 	if err := mappingRepo.LoadAndCache(context.Background()); err != nil {
+		ipc.SendAudit(fmt.Sprintf("Failed to load mapping rules: %v", err))
 		log.Fatalf("Failed to load mapping rules: %v", err)
 	}
 	ruleSet := mappingRepo.GetCachedRules()
@@ -223,6 +226,7 @@ func main() {
 	`
 	if err := pool.QueryRow(context.Background(), query, jobArgs.Topic).Scan(&wrappedKey); err != nil {
 		log.Printf("Warning: Failed to fetch wrapped key for topic %s: %v", jobArgs.Topic, err)
+		ipc.SendAudit(fmt.Sprintf("Warning: Failed to fetch wrapped key for topic %s: %v", jobArgs.Topic, err))
 		// Provide a fallback dummy wrapped key to avoid panics if not configured yet
 		masterKeyStr := os.Getenv("MASTER_KEY")
 		var masterKey []byte
@@ -268,6 +272,7 @@ dispatcherLoop:
 		fragments, err := ingestionRepo.ClaimAggregatedFragments(ctx, jobArgs.Topic, jobArgs.RequiredSources, jobArgs.BatchSize)
 		if err != nil {
 			log.Printf("Error claiming aggregated fragments: %v", err)
+			ipc.SendAudit(fmt.Sprintf("Error claiming aggregated fragments: %v", err))
 			time.Sleep(2 * time.Second)
 			continue
 		}
@@ -291,7 +296,7 @@ dispatcherLoop:
 	close(jobs)
 	wg.Wait()
 	log.Printf("Transformation Batch Job finished successfully. Processed %d records.", totalProcessed)
-	ipc.SendAudit(fmt.Sprintf("%s (%s) finished", appName, version))
+	ipc.SendAudit(fmt.Sprintf("Transformation Batch Job finished successfully. Processed %d records.", totalProcessed))
 	ipc.SendEvent("finished", fmt.Sprintf("Transformation Batch Job finished successfully. Processed %d records.", totalProcessed), 100)
 }
 
@@ -383,6 +388,8 @@ func worker(ctx context.Context, wg *sync.WaitGroup, jobs <-chan db.AggregatedFr
 
 		if err := targetRepo.WriteTargetAndComplete(context.Background(), aggFragment.CorrelationID, aggFragment.Topic, targetData, dbErrs); err != nil {
 			log.Printf("Failed to write target for correlation %s: %v", aggFragment.CorrelationID, err)
+			// TODO: Send audit to IPC
+			//ipc.SendAudit(fmt.Sprintf("Failed to write target for correlation %s: %v", aggFragment.CorrelationID, err))
 		}
 	}
 }
