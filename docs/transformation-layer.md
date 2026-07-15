@@ -45,6 +45,12 @@ _(Explanation: The engine first tries to parse an incoming date formatted as `YY
 _valid date formats:_
 
 ```code
+	time.RFC3339,                 // e.g. "2006-01-02T15:04:05Z07:00"
+	time.RFC3339Nano,             // e.g. "2006-01-02T15:04:05.999999999Z07:00"
+	"2006-01-02T15:04:05Z07:00",  // ISO 8601 / RFC 3339
+	"2006-01-02T15:04:05",        // ISO 8601 without timezone
+	"2006-01-02 15:04:05",        // yyyy-mm-dd HH:MM:SS
+	"2006-01-02 15:04:05.999999999 -0700 MST",
 	"01/02/2006", // mm/dd/yyyy
 	"02/01/2006", // dd/mm/yyyy
 	"02-01-2006", // dd-mm-yyyy

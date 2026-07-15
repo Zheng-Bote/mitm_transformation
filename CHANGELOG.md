@@ -2,6 +2,16 @@
 
 All notable changes to the Transformation Layer will be documented in this file.
 
+## [v0.11.0] - 2026-07-15
+### Added
+- **IPC Logging Enhancements**: Added `Topic` and `SourceName` fields to `IPCClient` to consistently prefix all IPC messages with `<Topic>: <SourceName>: `.
+- **Job Arguments**: Added `source_name` to `JobArgs` to explicitly pass the identity from the Scheduler to the Transformer (defaults to `"TRANSFORMATION"`).
+- **Audit Logging for Validation**: Validation errors are now broadcasted directly to the Scheduler console using the IPC audit log (`ipc.SendAudit`).
+- **Date Formatting Resilience**: Extended the fallback list of supported date string formats in `parse_date` to include `time.RFC3339` and `time.RFC3339Nano` to securely process standard dates mapped from serialized payloads of collector databases.
+
+### Fixed
+- **Validation Errors (DLQ)**: Fixed a bug where validation errors were skipped and only printed to the console. They are now correctly inserted into the `transformation_errors` table (DLQ).
+
 ## [v0.10.1] - 2026-07-08
 ### Fixed
 - **Target Insertion Error**: Fixed an issue in `target_repo.go` where the `INSERT INTO target_fragments` statement incorrectly referenced the outdated `raw_ingestion_id` column instead of the correct `correlation_id` column.

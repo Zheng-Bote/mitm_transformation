@@ -26,7 +26,7 @@ import (
 var (
 	appName        = "Transformation Engine"
 	appDescription = "Applies mapping rules and transformations to data"
-	version        = "1.0.0"
+	version        = "0.11.0"
 )
 
 // IPCClient is used to send events to the scheduler
@@ -34,6 +34,8 @@ type IPCClient struct {
 	SocketPath string
 	RunID      int
 	Component  string
+	Topic      string
+	SourceName string
 }
 
 func (c *IPCClient) SendEvent(status, message string, progress int) {
@@ -46,6 +48,10 @@ func (c *IPCClient) SendEvent(status, message string, progress int) {
 		return
 	}
 	defer conn.Close()
+
+	if c.Topic != "" && c.SourceName != "" {
+		message = fmt.Sprintf("%s: %s: %s", c.Topic, c.SourceName, message)
+	}
 
 	event := map[string]interface{}{
 		"run_id":   c.RunID,
@@ -68,6 +74,10 @@ func (c *IPCClient) SendAudit(message string) {
 		return
 	}
 	defer conn.Close()
+
+	if c.Topic != "" && c.SourceName != "" {
+		message = fmt.Sprintf("%s: %s: %s", c.Topic, c.SourceName, message)
+	}
 
 	event := map[string]interface{}{
 		"run_id":    c.RunID,
@@ -97,6 +107,7 @@ type JobArgs struct {
 	RetryFailed     bool     `json:"retry_failed"`
 	Topic           string   `json:"topic"`
 	RequiredSources []string `json:"required_sources"`
+	SourceName      string   `json:"source_name"`
 }
 
 func main() {
@@ -170,6 +181,14 @@ func main() {
 	}
 	if len(jobArgs.RequiredSources) == 0 {
 		jobArgs.RequiredSources = []string{"ORA_EMPLOYEE"}
+	}
+	if jobArgs.SourceName == "" {
+		jobArgs.SourceName = "TRANSFORMATION"
+	}
+
+	if ipc != nil {
+		ipc.Topic = jobArgs.Topic
+		ipc.SourceName = jobArgs.SourceName
 	}
 
 	// 1. Connect to Database
@@ -254,10 +273,18 @@ func main() {
 	jobs := make(chan db.AggregatedFragment, jobArgs.BatchSize)
 	var wg sync.WaitGroup
 
+	// Define logAudit
+	logAudit := func(msg string) {
+		log.Printf("AUDIT: %s", msg)
+		if ipc != nil {
+			ipc.SendAudit(msg)
+		}
+	}
+
 	// Start workers
 	for i := 0; i < jobArgs.Workers; i++ {
 		wg.Add(1)
-		go worker(ctx, &wg, jobs, pipeline, targetRepo, ruleSet, wrappedKey)
+		go worker(ctx, &wg, jobs, pipeline, targetRepo, ruleSet, wrappedKey, logAudit)
 	}
 
 	totalProcessed := 0
@@ -300,7 +327,7 @@ dispatcherLoop:
 	ipc.SendEvent("finished", fmt.Sprintf("Transformation Batch Job finished successfully. Processed %d records.", totalProcessed), 100)
 }
 
-func worker(ctx context.Context, wg *sync.WaitGroup, jobs <-chan db.AggregatedFragment, pipeline *engine.PipelineEngine, targetRepo *db.TargetRepo, ruleSet *db.RuleSet, wrappedKey []byte) {
+func worker(ctx context.Context, wg *sync.WaitGroup, jobs <-chan db.AggregatedFragment, pipeline *engine.PipelineEngine, targetRepo *db.TargetRepo, ruleSet *db.RuleSet, wrappedKey []byte, logAudit func(string)) {
 	defer wg.Done()
 
 	// Fetch Master Key from Env (fallback to 32 bytes of zeros if not set - for dev)
@@ -354,7 +381,7 @@ func worker(ctx context.Context, wg *sync.WaitGroup, jobs <-chan db.AggregatedFr
 		}
 
 		if len(decryptionErrs) > 0 {
-			_ = targetRepo.WriteTargetAndComplete(context.Background(), aggFragment.CorrelationID, aggFragment.Topic, nil, decryptionErrs)
+			_ = targetRepo.WriteTargetAndComplete(context.Background(), aggFragment.CorrelationID, aggFragment.Topic, nil, decryptionErrs, logAudit)
 			continue
 		}
 
@@ -371,7 +398,7 @@ func worker(ctx context.Context, wg *sync.WaitGroup, jobs <-chan db.AggregatedFr
 
 		if sourceID == "" {
 			dbErrs := []db.TransformationError{{FailedField: "topic", RuleName: "source_lookup", ErrorMessage: "No mapping source found for topic"}}
-			_ = targetRepo.WriteTargetAndComplete(context.Background(), aggFragment.CorrelationID, aggFragment.Topic, nil, dbErrs)
+			_ = targetRepo.WriteTargetAndComplete(context.Background(), aggFragment.CorrelationID, aggFragment.Topic, nil, dbErrs, logAudit)
 			continue
 		}
 
@@ -386,10 +413,12 @@ func worker(ctx context.Context, wg *sync.WaitGroup, jobs <-chan db.AggregatedFr
 			})
 		}
 
-		if err := targetRepo.WriteTargetAndComplete(context.Background(), aggFragment.CorrelationID, aggFragment.Topic, targetData, dbErrs); err != nil {
-			log.Printf("Failed to write target for correlation %s: %v", aggFragment.CorrelationID, err)
-			// TODO: Send audit to IPC
-			//ipc.SendAudit(fmt.Sprintf("Failed to write target for correlation %s: %v", aggFragment.CorrelationID, err))
+		if err := targetRepo.WriteTargetAndComplete(context.Background(), aggFragment.CorrelationID, aggFragment.Topic, targetData, dbErrs, logAudit); err != nil {
+			msg := fmt.Sprintf("Failed to write target for correlation %s: %v", aggFragment.CorrelationID, err)
+			log.Println(msg)
+			if logAudit != nil {
+				logAudit(msg)
+			}
 		}
 	}
 }

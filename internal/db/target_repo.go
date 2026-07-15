@@ -43,7 +43,7 @@ func NewTargetRepo(pool *pgxpool.Pool) *TargetRepo {
 }
 
 // WriteTargetAndComplete commits the final state for a processed aggregated fragment.
-func (r *TargetRepo) WriteTargetAndComplete(ctx context.Context, correlationID string, topic string, data map[string]interface{}, errors []TransformationError) error {
+func (r *TargetRepo) WriteTargetAndComplete(ctx context.Context, correlationID string, topic string, data map[string]interface{}, errors []TransformationError, logAudit func(string)) error {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
@@ -52,8 +52,15 @@ func (r *TargetRepo) WriteTargetAndComplete(ctx context.Context, correlationID s
 
 	if len(errors) > 0 {
 		for _, pe := range errors {
-			log.Printf("Validation Error for correlation %s on field %s: %s (Rule: %s)", correlationID, pe.FailedField, pe.ErrorMessage, pe.RuleName)
-			// Skip inserting into transformation_errors because of schema constraints in test DB
+			msg := fmt.Sprintf("Validation Error for correlation %s on field %s: %s (Rule: %s)", correlationID, pe.FailedField, pe.ErrorMessage, pe.RuleName)
+			log.Println(msg)
+			if logAudit != nil {
+				logAudit(msg)
+			}
+			_, err := tx.Exec(ctx, `INSERT INTO transformation_errors (correlation_id, failed_field, rule_name, error_message) VALUES ($1, $2, $3, $4)`, correlationID, pe.FailedField, pe.RuleName, pe.ErrorMessage)
+			if err != nil {
+				return fmt.Errorf("failed to insert into transformation_errors: %w", err)
+			}
 		}
 		_, err = tx.Exec(ctx, `UPDATE raw_ingestion SET status = 'failed_validation', processed_at = NOW() WHERE correlation_id = $1`, correlationID)
 		if err != nil {

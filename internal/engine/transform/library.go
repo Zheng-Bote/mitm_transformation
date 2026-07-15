@@ -141,6 +141,12 @@ func ParseDate(val interface{}, params map[string]interface{}) (interface{}, err
 		}
 	} else {
 		formats := []string{
+			time.RFC3339,
+			time.RFC3339Nano,
+			"2006-01-02T15:04:05Z07:00",
+			"2006-01-02T15:04:05",
+			"2006-01-02 15:04:05",
+			"2006-01-02 15:04:05.999999999 -0700 MST",
 			"01/02/2006", // mm/dd/yyyy
 			"02/01/2006", // dd/mm/yyyy
 			"02-01-2006", // dd-mm-yyyy

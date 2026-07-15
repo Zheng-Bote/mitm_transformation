@@ -32,7 +32,7 @@ export MITM_DB_NAME="mitm"
 export MITM_DB_SSLMODE="true"
 
 # 2. Optional Job Args JSON
-ARGS_JSON='{"workers": 5, "batch_size": 500, "retry_failed": false, "topic": "employee.data", "required_sources": ["ORA_EMPLOYEE", "PG_EMPLOYEE"]}'
+ARGS_JSON='{"workers": 5, "batch_size": 500, "retry_failed": false, "topic": "employee.data", "required_sources": ["ORA_EMPLOYEE", "PG_EMPLOYEE"], "source_name": "TRANSFORMATION"}'
 
 ./bin/mitm-transformer "$ARGS_JSON"
 ```
@@ -47,6 +47,7 @@ ARGS_JSON='{"workers": 5, "batch_size": 500, "retry_failed": false, "topic": "em
   - `retry_failed`: Re-process records currently in `failed_validation` state instead of processing `pending` records.
   - `topic`: The topic to process (e.g. `employee.data`).
   - `required_sources`: An array of source system names that are mandatory for the topic before aggregation can occur.
+  - `source_name`: The component identity for audit logging (default: `"TRANSFORMATION"`).
 
 ## Dead Letter Queue (DLQ) & Reprocessing
 
