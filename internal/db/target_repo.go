@@ -54,14 +54,21 @@ func (r *TargetRepo) WriteTargetAndComplete(ctx context.Context, correlationID s
 		for _, pe := range errors {
 			msg := fmt.Sprintf("Validation Error for correlation %s on field %s: %s (Rule: %s)", correlationID, pe.FailedField, pe.ErrorMessage, pe.RuleName)
 			log.Println(msg)
-			if logAudit != nil {
-				logAudit(msg)
-			}
+			// wasted due to logging to transformation_errors
+			// if logAudit != nil {
+			// 	logAudit(msg)
+			// }
 			_, err := tx.Exec(ctx, `INSERT INTO transformation_errors (correlation_id, failed_field, rule_name, error_message) VALUES ($1, $2, $3, $4)`, correlationID, pe.FailedField, pe.RuleName, pe.ErrorMessage)
 			if err != nil {
 				return fmt.Errorf("failed to insert into transformation_errors: %w", err)
 			}
 		}
+
+		if logAudit != nil {
+			msg := fmt.Sprintf("%d validation errors logged for topic %s", len(errors), topic)
+			logAudit(msg)
+		}
+
 		_, err = tx.Exec(ctx, `UPDATE raw_ingestion SET status = 'failed_validation', processed_at = NOW() WHERE correlation_id = $1`, correlationID)
 		if err != nil {
 			return fmt.Errorf("failed to update raw_ingestion status: %w", err)
