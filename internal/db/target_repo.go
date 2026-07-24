@@ -64,10 +64,10 @@ func (r *TargetRepo) WriteTargetAndComplete(ctx context.Context, correlationID s
 			}
 		}
 
-		if logAudit != nil {
-			msg := fmt.Sprintf("%d validation errors logged for topic %s", len(errors), topic)
-			logAudit(msg)
-		}
+		//if logAudit != nil {
+		//	msg := fmt.Sprintf("%d validation errors logged for topic %s", len(errors), topic)
+		//	logAudit(msg)
+		//}
 
 		_, err = tx.Exec(ctx, `UPDATE raw_ingestion SET status = 'failed_validation', processed_at = NOW() WHERE correlation_id = $1`, correlationID)
 		if err != nil {
