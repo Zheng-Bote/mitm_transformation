@@ -2,6 +2,12 @@
 
 All notable changes to the Transformation Layer will be documented in this file.
 
+## [v0.13.0] - 2026-07-24
+
+### Changed
+
+- **Version Bump**: Updated engine version to `v0.13.0` to align with the overarching MitM Aggregator system updates, documentation enhancements, and database configuration fixes.
+
 ## [v0.12.0] - 2026-07-19
 
 ### Changed

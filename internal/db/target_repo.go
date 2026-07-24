@@ -43,7 +43,7 @@ func NewTargetRepo(pool *pgxpool.Pool) *TargetRepo {
 }
 
 // WriteTargetAndComplete commits the final state for a processed aggregated fragment.
-func (r *TargetRepo) WriteTargetAndComplete(ctx context.Context, correlationID string, topic string, data map[string]interface{}, errors []TransformationError, logAudit func(string)) error {
+func (r *TargetRepo) WriteTargetAndComplete(ctx context.Context, correlationID string, rawIngestionID string, topic string, data map[string]interface{}, errors []TransformationError, logAudit func(string)) error {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
@@ -58,7 +58,7 @@ func (r *TargetRepo) WriteTargetAndComplete(ctx context.Context, correlationID s
 			// if logAudit != nil {
 			// 	logAudit(msg)
 			// }
-			_, err := tx.Exec(ctx, `INSERT INTO transformation_errors (correlation_id, failed_field, rule_name, error_message) VALUES ($1, $2, $3, $4)`, correlationID, pe.FailedField, pe.RuleName, pe.ErrorMessage)
+			_, err := tx.Exec(ctx, `INSERT INTO transformation_errors (raw_ingestion_id, failed_field, rule_name, error_message) VALUES ($1, $2, $3, $4)`, rawIngestionID, pe.FailedField, pe.RuleName, pe.ErrorMessage)
 			if err != nil {
 				return fmt.Errorf("failed to insert into transformation_errors: %w", err)
 			}
@@ -75,10 +75,16 @@ func (r *TargetRepo) WriteTargetAndComplete(ctx context.Context, correlationID s
 		}
 	} else {
 		if len(data) > 0 {
-			query := `INSERT INTO target_fragments (correlation_id, topic, payload_jsonb, delivery_status) VALUES ($1, $2, $3, 'PENDING')`
-			_, err = tx.Exec(ctx, query, correlationID, topic, data)
+			query := `INSERT INTO target_fragments (raw_ingestion_id, topic, payload_jsonb, delivery_status) VALUES ($1, $2, $3, 'PENDING')`
+			_, err = tx.Exec(ctx, query, rawIngestionID, topic, data)
 			if err != nil {
 				return fmt.Errorf("failed to insert into target_fragments: %w", err)
+			}
+		} else {
+			msg := fmt.Sprintf("Warning: Transformed payload for correlation %s (Topic: %s) is empty. Are mapping rules missing? Skipping fragment creation.", correlationID, topic)
+			log.Println(msg)
+			if logAudit != nil {
+				logAudit(msg)
 			}
 		}
 

@@ -26,7 +26,7 @@ import (
 var (
 	appName        = "Transformation Engine"
 	appDescription = "Applies mapping rules and transformations to data"
-	version        = "0.11.0"
+	version        = "0.13.0"
 )
 
 // IPCClient is used to send events to the scheduler
@@ -381,7 +381,7 @@ func worker(ctx context.Context, wg *sync.WaitGroup, jobs <-chan db.AggregatedFr
 		}
 
 		if len(decryptionErrs) > 0 {
-			_ = targetRepo.WriteTargetAndComplete(context.Background(), aggFragment.CorrelationID, aggFragment.Topic, nil, decryptionErrs, logAudit)
+			_ = targetRepo.WriteTargetAndComplete(context.Background(), aggFragment.CorrelationID, aggFragment.Fragments[0].ID, aggFragment.Topic, nil, decryptionErrs, logAudit)
 			continue
 		}
 
@@ -398,7 +398,7 @@ func worker(ctx context.Context, wg *sync.WaitGroup, jobs <-chan db.AggregatedFr
 
 		if sourceID == "" {
 			dbErrs := []db.TransformationError{{FailedField: "topic", RuleName: "source_lookup", ErrorMessage: "No mapping source found for topic"}}
-			_ = targetRepo.WriteTargetAndComplete(context.Background(), aggFragment.CorrelationID, aggFragment.Topic, nil, dbErrs, logAudit)
+			_ = targetRepo.WriteTargetAndComplete(context.Background(), aggFragment.CorrelationID, aggFragment.Fragments[0].ID, aggFragment.Topic, nil, dbErrs, logAudit)
 			continue
 		}
 
@@ -413,7 +413,7 @@ func worker(ctx context.Context, wg *sync.WaitGroup, jobs <-chan db.AggregatedFr
 			})
 		}
 
-		if err := targetRepo.WriteTargetAndComplete(context.Background(), aggFragment.CorrelationID, aggFragment.Topic, targetData, dbErrs, logAudit); err != nil {
+		if err := targetRepo.WriteTargetAndComplete(context.Background(), aggFragment.CorrelationID, aggFragment.Fragments[0].ID, aggFragment.Topic, targetData, dbErrs, logAudit); err != nil {
 			msg := fmt.Sprintf("Failed to write target for correlation %s: %v", aggFragment.CorrelationID, err)
 			log.Println(msg)
 			if logAudit != nil {
