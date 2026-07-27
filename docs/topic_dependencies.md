@@ -14,8 +14,8 @@ This table serves as a configuration and rule set for when a dataset is consider
         required_sources TEXT[] NOT NULL
     );
 
-• topic: The name of the business topic (e.g., EmployeeData).
-• required_sources: An array (a list) of strings that exactly defines which source systems (e.g., ['SAP_HR', 'ActiveDirectory']) must deliver data for this topic.
+- topic: The name of the business topic (e.g., EmployeeData).
+- required_sources: An array (a list) of strings that exactly defines which source systems (e.g., ['SAP_HR', 'ActiveDirectory']) must deliver data for this topic.
 
 ## 3. How it Works at Runtime (Stateful Aggregation)
 
@@ -25,11 +25,11 @@ The Transformation Layer operates as a so-called Stateful Aggregator. The proces
 2. The Waiting Mode (Stateful): The Orchestrator checks the incoming fragments based on the correlation_id. Instead of immediately processing the fragment from the first system, the Orchestrator looks up in the topic_dependencies table which required_sources are strictly required for this topic.
 3. The Matching: The Orchestrator basically waits until fragments for a specific correlation_id from all required_sources requested in the list have arrived in the database.
 4. Merging & Transformation: As soon as the condition is met (all necessary systems have delivered):
-   • The Orchestrator fetches all associated raw_ingestion fragments.
-   • The encrypted payloads (payload) are decrypted using the Data Encryption Key (DEK).
-   • The fragments are merged into a large JSON dataset (the Golden Record).
-   • Only then are the mappings, transformations, and validation rules applied.
-   • After successful processing, the final dataset is (partially) encrypted again and written to the target_fragments table.
+   - The Orchestrator fetches all associated raw_ingestion fragments.
+   - The encrypted payloads (payload) are decrypted using the Data Encryption Key (DEK).
+   - The fragments are merged into a large JSON dataset (the Golden Record).
+   - Only then are the mappings, transformations, and validation rules applied.
+   - After successful processing, the final dataset is (partially) encrypted again and written to the target_fragments table.
 
 ### Correlation ID
 
@@ -43,15 +43,15 @@ Here is the exact process:
 
 For each source system, the column that serves as the primary identification feature is configured in the collector.
 
-• For the HR collector, you set e.g.: business_key_column = "Personalnummer"
-• For the AD collector, you set e.g.: business_key_column = "Mitarbeiternummer"
+- For the HR collector, you set e.g.: business_key_column = "Personalnummer"
+- For the AD collector, you set e.g.: business_key_column = "Mitarbeiternummer"
 
 #### 2. Reading the Key at Runtime
 
 When the collector now reads a dataset from the source system, it dynamically extracts the value from this configured column.
 
-• The HR system delivers a dataset with Personalnummer = "12345". The collector stores in the variable businessKey = "12345".
-• The AD system delivers a dataset with Mitarbeiternummer = "12345". The collector also stores businessKey = "12345" here.
+- The HR system delivers a dataset with Personalnummer = "12345". The collector stores in the variable businessKey = "12345".
+- The AD system delivers a dataset with Mitarbeiternummer = "12345". The collector also stores businessKey = "12345" here.
 
 #### 3. Deterministic UUID Generation
 
