@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -111,6 +112,8 @@ type JobArgs struct {
 }
 
 func main() {
+	version = strings.Split(version, "-")[0]
+
 	var ipc *IPCClient
 	runIDStr := os.Getenv("RUN_ID")
 	socketPath := os.Getenv("SCHEDULER_SOCKET_PATH")

@@ -20,9 +20,9 @@ package engine
 import (
 	"encoding/json"
 	"fmt"
-	"strings"
 	"mitm_transformation/internal/crypto"
 	"mitm_transformation/internal/db"
+	"strings"
 )
 
 // PipelineError represents a validation or transformation error suitable for DLQ logging.
