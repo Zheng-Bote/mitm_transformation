@@ -17,7 +17,7 @@ Transformations modify, reformat, or compute data. They are executed sequentiall
 - `regex_replace`: Replaces text matching a regex pattern.
 - `parse_date`: Parses a date from an input format and outputs it in a new format. If `input_format` is omitted, it automatically detects common formats (e.g. `dd.mm.yyyy`, `mm/dd/yyyy`) and defaults to a `yyyy-mm-dd` output format.
 - `string_split`: Splits a string and takes a specific index.
-- `cast_type`: Casts data types (e.g. string to int).
+- `cast_type`: Casts data types (e.g. string to int). **Please note:** priority is given to the defined schema (mapping_target_field).
 
 **JSON Configuration Example:**
 The configuration is stored in the database as a JSON array in the `transformation_chain` column.

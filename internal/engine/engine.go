@@ -20,9 +20,11 @@ package engine
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
+	"strings"
+
 	"mitm_transformation/internal/crypto"
 	"mitm_transformation/internal/db"
-	"strings"
 )
 
 // PipelineError represents a validation or transformation error suitable for DLQ logging.
@@ -112,6 +114,48 @@ func (p *PipelineEngine) ProcessPayload(payload map[string]interface{}, sourceID
 				ErrorMessage: errMsg,
 			})
 			continue
+		}
+
+		// Auto-Cast based on targetField.DataType
+		if transformedVal != nil && targetField.DataType != "" {
+			strVal := fmt.Sprintf("%v", transformedVal)
+			switch strings.ToLower(targetField.DataType) {
+			case "int", "integer", "int64":
+				if i, err := strconv.ParseInt(strVal, 10, 64); err == nil {
+					transformedVal = i
+				} else {
+					errors = append(errors, PipelineError{
+						FailedField:  rule.SourceField,
+						RuleName:     "auto_cast",
+						ErrorMessage: fmt.Sprintf("failed to cast %v to int: %v", transformedVal, err),
+					})
+					continue
+				}
+			case "float", "float64", "numeric", "decimal":
+				if f, err := strconv.ParseFloat(strVal, 64); err == nil {
+					transformedVal = f
+				} else {
+					errors = append(errors, PipelineError{
+						FailedField:  rule.SourceField,
+						RuleName:     "auto_cast",
+						ErrorMessage: fmt.Sprintf("failed to cast %v to float: %v", transformedVal, err),
+					})
+					continue
+				}
+			case "bool", "boolean":
+				if b, err := strconv.ParseBool(strVal); err == nil {
+					transformedVal = b
+				} else {
+					errors = append(errors, PipelineError{
+						FailedField:  rule.SourceField,
+						RuleName:     "auto_cast",
+						ErrorMessage: fmt.Sprintf("failed to cast %v to bool: %v", transformedVal, err),
+					})
+					continue
+				}
+			case "string", "text", "varchar":
+				transformedVal = strVal
+			}
 		}
 
 		// Encryption if needed

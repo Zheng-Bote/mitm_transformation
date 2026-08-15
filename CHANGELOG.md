@@ -7,6 +7,7 @@ All notable changes to the Transformation Layer will be documented in this file.
 ### Added
 
 - **Documentation**: Added examples for `regex_replace`, `string_split`, and `cast_type` in `transformation-layer.md`.
+- **Auto-Casting**: Implemented automatic type casting in `PipelineEngine.ProcessPayload` based on `mapping_target_field.data_type`. Implicit cast failures generate a `PipelineError` for graceful DLQ handling.
 
 ### Fixed
 
