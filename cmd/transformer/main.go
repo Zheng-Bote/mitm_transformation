@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -27,7 +28,7 @@ import (
 var (
 	appName        = "Transformation Engine"
 	appDescription = "Applies mapping rules and transformations to data"
-	version        = "0.13.0"
+	version        = "0.15.0"
 )
 
 // IPCClient is used to send events to the scheduler
@@ -372,7 +373,9 @@ func worker(ctx context.Context, wg *sync.WaitGroup, jobs <-chan db.AggregatedFr
 
 			var payload map[string]interface{}
 			// 2. Parse decrypted JSON
-			if err := json.Unmarshal(decryptedPayload, &payload); err != nil {
+			decoder := json.NewDecoder(bytes.NewReader(decryptedPayload))
+			decoder.UseNumber()
+			if err := decoder.Decode(&payload); err != nil {
 				decryptionErrs = append(decryptionErrs, db.TransformationError{
 					FailedField:  "payload",
 					RuleName:     "json_parse",

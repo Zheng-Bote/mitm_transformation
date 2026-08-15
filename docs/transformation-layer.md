@@ -36,11 +36,31 @@ The configuration is stored in the database as a JSON array in the `transformati
     "parameters": {
       "value": "01.01.1900"
     }
+  },
+  {
+    "name": "regex_replace",
+    "parameters": {
+      "pattern": "[üÜ]",
+      "replace": "ue"
+    }
+  },
+  {
+    "name": "string_split",
+    "parameters": {
+      "separator": ",",
+      "index": 0
+    }
+  },
+  {
+    "name": "cast_type",
+    "parameters": {
+      "target_type": "int"
+    }
   }
 ]
 ```
 
-_(Explanation: The engine first tries to parse an incoming date formatted as `YYYY-MM-DD` and formats it as `DD.MM.YYYY`. If the field was originally empty, it falls back to `01.01.1900`)._
+_(Explanation: The engine first tries to parse an incoming date formatted as `YYYY-MM-DD` and formats it as `DD.MM.YYYY`. If the field was originally empty, it falls back to `01.01.1900`. Then, it replaces all occurrences of "ü" or "Ü" with "ue". After that, it splits the string by comma and takes the first element. Finally, it casts the resulting value to an integer)._
 
 _valid date formats:_
 

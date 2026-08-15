@@ -2,6 +2,16 @@
 
 All notable changes to the Transformation Layer will be documented in this file.
 
+## [v0.15.0] - 2026-08-15
+
+### Added
+
+- **Documentation**: Added examples for `regex_replace`, `string_split`, and `cast_type` in `transformation-layer.md`.
+
+### Fixed
+
+- **Data Parsing**: Replaced `json.Unmarshal` with `json.Decoder.UseNumber()` to prevent large integer values (like IDs) from being implicitly cast to `float64` and converted to scientific notation during processing in the Transformation and Delivery layers.
+
 ## [v0.14.0] - 2026-07-29
 
 ### Added
