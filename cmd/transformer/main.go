@@ -294,13 +294,50 @@ func main() {
 		}
 	}
 
+	// Find total number of records to process
+	var totalRecords int
+	countQuery := `
+		WITH ready_groups AS (
+			SELECT correlation_id
+			FROM raw_ingestion
+			WHERE topic = $1 AND status = 'pending' AND correlation_id IS NOT NULL
+			GROUP BY correlation_id
+			HAVING COUNT(DISTINCT source_system) >= $2
+		)
+		SELECT COUNT(*) FROM ready_groups
+	`
+	_ = pool.QueryRow(context.Background(), countQuery, jobArgs.Topic, len(jobArgs.RequiredSources)).Scan(&totalRecords)
+	
+	reportInterval := int32(totalRecords / 10)
+	if reportInterval <= 0 {
+		reportInterval = 10
+	}
+	
+	if logAudit != nil {
+		logAudit(fmt.Sprintf("Total records to process: %d (Reporting every %d records, 10%%)", totalRecords, reportInterval))
+	}
+
 	// Metrics
 	var stats JobStats
+
+	// Define reportProgress
+	reportProgress := func(processed int32) {
+		var percent int
+		if totalRecords > 0 {
+			percent = int((int64(processed) * 100) / int64(totalRecords))
+		}
+		msg := fmt.Sprintf("Progress: %d records processed (approx. %d%%)...", processed, percent)
+		log.Printf("AUDIT: %s", msg)
+		if ipc != nil {
+			ipc.SendAudit(msg)
+			ipc.SendEvent("processing", msg, percent)
+		}
+	}
 
 	// Start workers
 	for i := 0; i < jobArgs.Workers; i++ {
 		wg.Add(1)
-		go worker(ctx, &wg, jobs, pipeline, targetRepo, ruleSet, wrappedKey, logAudit, &stats)
+		go worker(ctx, &wg, jobs, pipeline, targetRepo, ruleSet, wrappedKey, logAudit, reportProgress, reportInterval, &stats)
 	}
 
 	// 4. Dispatcher Loop
@@ -355,7 +392,7 @@ dispatcherLoop:
 	ipc.SendEvent("finished", fmt.Sprintf("Transformation Batch Job finished successfully. %s", statsMsg), 100)
 }
 
-func worker(ctx context.Context, wg *sync.WaitGroup, jobs <-chan db.AggregatedFragment, pipeline *engine.PipelineEngine, targetRepo *db.TargetRepo, ruleSet *db.RuleSet, wrappedKey []byte, logAudit func(string), stats *JobStats) {
+func worker(ctx context.Context, wg *sync.WaitGroup, jobs <-chan db.AggregatedFragment, pipeline *engine.PipelineEngine, targetRepo *db.TargetRepo, ruleSet *db.RuleSet, wrappedKey []byte, logAudit func(string), reportProgress func(int32), reportInterval int32, stats *JobStats) {
 	defer wg.Done()
 
 	// Fetch Master Key from Env (fallback to 32 bytes of zeros if not set - for dev)
@@ -380,7 +417,10 @@ func worker(ctx context.Context, wg *sync.WaitGroup, jobs <-chan db.AggregatedFr
 	}
 
 	for aggFragment := range jobs {
-		stats.Processed.Add(1)
+		p := stats.Processed.Add(1)
+		if p%reportInterval == 0 && reportProgress != nil {
+			reportProgress(p)
+		}
 		var payloads []map[string]interface{}
 		var decryptionErrs []db.TransformationError
 
