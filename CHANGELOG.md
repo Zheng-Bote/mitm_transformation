@@ -2,10 +2,12 @@
 
 All notable changes to the Transformation Layer will be documented in this file.
 
-## [v0.15.0] - 2026-08-15
+## [v0.15.0] - 2026-08-23
 
 ### Added
 
+- **Detailed Reporting**: Introduced atomic metrics (`sync/atomic`) across the worker pool to accurately track processed, transformed, validated, and failed records per batch job.
+- **Audit Logging**: Enhanced IPC reporting to the Scheduler. Batch jobs now send detailed completion statistics (e.g., `<Topic>: <SourceName>: 10 records transformed`) directly to the Job Audit Log.
 - **Documentation**: Added examples for `regex_replace`, `string_split`, and `cast_type` in `transformation-layer.md`.
 - **Auto-Casting**: Implemented automatic type casting in `PipelineEngine.ProcessPayload` based on `mapping_target_field.data_type`. Implicit cast failures generate a `PipelineError` for graceful DLQ handling.
 

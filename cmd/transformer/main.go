@@ -13,6 +13,8 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
+	
 	"syscall"
 	"time"
 
@@ -101,6 +103,13 @@ type DBConnectionConfig struct {
 
 type DBConfig struct {
 	DB DBConnectionConfig `json:"db"`
+}
+
+type JobStats struct {
+	Processed   atomic.Int32
+	Transformed atomic.Int32
+	Validated   atomic.Int32
+	Failed      atomic.Int32
 }
 
 type JobArgs struct {
@@ -285,13 +294,14 @@ func main() {
 		}
 	}
 
+	// Metrics
+	var stats JobStats
+
 	// Start workers
 	for i := 0; i < jobArgs.Workers; i++ {
 		wg.Add(1)
-		go worker(ctx, &wg, jobs, pipeline, targetRepo, ruleSet, wrappedKey, logAudit)
+		go worker(ctx, &wg, jobs, pipeline, targetRepo, ruleSet, wrappedKey, logAudit, &stats)
 	}
-
-	totalProcessed := 0
 
 	// 4. Dispatcher Loop
 dispatcherLoop:
@@ -321,17 +331,31 @@ dispatcherLoop:
 				break dispatcherLoop
 			}
 		}
-		totalProcessed += len(fragments)
 	}
 
 	close(jobs)
 	wg.Wait()
-	log.Printf("Transformation Batch Job finished successfully. Processed %d records.", totalProcessed)
-	ipc.SendAudit(fmt.Sprintf("Transformation Batch Job finished successfully. Processed %d records.", totalProcessed))
-	ipc.SendEvent("finished", fmt.Sprintf("Transformation Batch Job finished successfully. Processed %d records.", totalProcessed), 100)
+	
+	processed := stats.Processed.Load()
+	transformed := stats.Transformed.Load()
+	validated := stats.Validated.Load()
+	failed := stats.Failed.Load()
+	
+	statsMsg := fmt.Sprintf("%d records processed, %d transformed, %d passed validation, %d failed", processed, transformed, validated, failed)
+	log.Printf("Transformation Batch Job finished successfully. %s", statsMsg)
+	
+	if ipc != nil {
+		ipc.SendAudit(fmt.Sprintf("%d records transformed", transformed))
+		ipc.SendAudit(fmt.Sprintf("%d records validated", validated))
+		if failed > 0 {
+			ipc.SendAudit(fmt.Sprintf("%d records failed", failed))
+		}
+	}
+	
+	ipc.SendEvent("finished", fmt.Sprintf("Transformation Batch Job finished successfully. %s", statsMsg), 100)
 }
 
-func worker(ctx context.Context, wg *sync.WaitGroup, jobs <-chan db.AggregatedFragment, pipeline *engine.PipelineEngine, targetRepo *db.TargetRepo, ruleSet *db.RuleSet, wrappedKey []byte, logAudit func(string)) {
+func worker(ctx context.Context, wg *sync.WaitGroup, jobs <-chan db.AggregatedFragment, pipeline *engine.PipelineEngine, targetRepo *db.TargetRepo, ruleSet *db.RuleSet, wrappedKey []byte, logAudit func(string), stats *JobStats) {
 	defer wg.Done()
 
 	// Fetch Master Key from Env (fallback to 32 bytes of zeros if not set - for dev)
@@ -356,6 +380,7 @@ func worker(ctx context.Context, wg *sync.WaitGroup, jobs <-chan db.AggregatedFr
 	}
 
 	for aggFragment := range jobs {
+		stats.Processed.Add(1)
 		var payloads []map[string]interface{}
 		var decryptionErrs []db.TransformationError
 
@@ -387,6 +412,7 @@ func worker(ctx context.Context, wg *sync.WaitGroup, jobs <-chan db.AggregatedFr
 		}
 
 		if len(decryptionErrs) > 0 {
+			stats.Failed.Add(1)
 			_ = targetRepo.WriteTargetAndComplete(context.Background(), aggFragment.CorrelationID, aggFragment.Fragments[0].ID, aggFragment.Topic, nil, decryptionErrs, logAudit)
 			continue
 		}
@@ -403,6 +429,7 @@ func worker(ctx context.Context, wg *sync.WaitGroup, jobs <-chan db.AggregatedFr
 		}
 
 		if sourceID == "" {
+			stats.Failed.Add(1)
 			dbErrs := []db.TransformationError{{FailedField: "topic", RuleName: "source_lookup", ErrorMessage: "No mapping source found for topic"}}
 			_ = targetRepo.WriteTargetAndComplete(context.Background(), aggFragment.CorrelationID, aggFragment.Fragments[0].ID, aggFragment.Topic, nil, dbErrs, logAudit)
 			continue
@@ -411,12 +438,16 @@ func worker(ctx context.Context, wg *sync.WaitGroup, jobs <-chan db.AggregatedFr
 		targetData, pipelineErrs := pipeline.ProcessPayload(goldenRecord, sourceID, ruleSet, masterKey, wrappedKey)
 
 		var dbErrs []db.TransformationError
+		hasValidationErr := false
 		for _, pe := range pipelineErrs {
 			dbErrs = append(dbErrs, db.TransformationError{
 				FailedField:  pe.FailedField,
 				RuleName:     pe.RuleName,
 				ErrorMessage: pe.ErrorMessage,
 			})
+			if pe.RuleName == "validation" {
+				hasValidationErr = true
+			}
 		}
 
 		if err := targetRepo.WriteTargetAndComplete(context.Background(), aggFragment.CorrelationID, aggFragment.Fragments[0].ID, aggFragment.Topic, targetData, dbErrs, logAudit); err != nil {
@@ -424,6 +455,16 @@ func worker(ctx context.Context, wg *sync.WaitGroup, jobs <-chan db.AggregatedFr
 			log.Println(msg)
 			if logAudit != nil {
 				logAudit(msg)
+			}
+			stats.Failed.Add(1)
+		} else {
+			if len(dbErrs) > 0 {
+				stats.Failed.Add(1)
+			} else {
+				stats.Transformed.Add(1)
+				if !hasValidationErr {
+					stats.Validated.Add(1)
+				}
 			}
 		}
 	}
