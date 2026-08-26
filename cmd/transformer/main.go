@@ -14,7 +14,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
-	
+
 	"syscall"
 	"time"
 
@@ -307,12 +307,12 @@ func main() {
 		SELECT COUNT(*) FROM ready_groups
 	`
 	_ = pool.QueryRow(context.Background(), countQuery, jobArgs.Topic, len(jobArgs.RequiredSources)).Scan(&totalRecords)
-	
+
 	reportInterval := int32(totalRecords / 10)
 	if reportInterval <= 0 {
 		reportInterval = 10
 	}
-	
+
 	if logAudit != nil {
 		logAudit(fmt.Sprintf("Total records to process: %d (Reporting every %d records, 10%%)", totalRecords, reportInterval))
 	}
@@ -372,15 +372,15 @@ dispatcherLoop:
 
 	close(jobs)
 	wg.Wait()
-	
+
 	processed := stats.Processed.Load()
 	transformed := stats.Transformed.Load()
 	validated := stats.Validated.Load()
 	failed := stats.Failed.Load()
-	
+
 	statsMsg := fmt.Sprintf("%d records processed, %d transformed, %d passed validation, %d failed", processed, transformed, validated, failed)
 	log.Printf("Transformation Batch Job finished successfully. %s", statsMsg)
-	
+
 	if ipc != nil {
 		ipc.SendAudit(fmt.Sprintf("%d records transformed", transformed))
 		ipc.SendAudit(fmt.Sprintf("%d records validated", validated))
@@ -388,8 +388,9 @@ dispatcherLoop:
 			ipc.SendAudit(fmt.Sprintf("%d records failed", failed))
 		}
 	}
-	
+
 	ipc.SendEvent("finished", fmt.Sprintf("Transformation Batch Job finished successfully. %s", statsMsg), 100)
+	ipc.SendAudit(fmt.Sprintf("Transformation Batch Job finished successfully. %s", statsMsg))
 }
 
 func worker(ctx context.Context, wg *sync.WaitGroup, jobs <-chan db.AggregatedFragment, pipeline *engine.PipelineEngine, targetRepo *db.TargetRepo, ruleSet *db.RuleSet, wrappedKey []byte, logAudit func(string), reportProgress func(int32), reportInterval int32, stats *JobStats) {

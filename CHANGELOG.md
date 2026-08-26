@@ -2,6 +2,12 @@
 
 All notable changes to the Transformation Layer will be documented in this file.
 
+## [v0.16.0] - 2026-08-26
+
+### Fixed
+
+- **Logging**: Added `ipc.SendAudit` to the Transformation Layer to send detailed completion statistics to the Scheduler.
+
 ## [v0.15.0] - 2026-08-23
 
 ### Added
