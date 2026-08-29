@@ -210,7 +210,16 @@ func main() {
 		sslMode = "require"
 	}
 	connString := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=%s", dbCfg.DB.User, dbCfg.DB.Password, dbCfg.DB.Host, dbCfg.DB.Port, dbCfg.DB.Database, sslMode)
-	pool, err := pgxpool.New(context.Background(), connString)
+	config_pool, err := pgxpool.ParseConfig(connString)
+	if err == nil {
+		config_pool.MaxConns = 20
+		config_pool.MaxConnIdleTime = 5 * time.Minute
+		config_pool.MaxConnLifetime = 1 * time.Hour
+	}
+	var pool *pgxpool.Pool
+	if err == nil {
+		pool, err = pgxpool.NewWithConfig(context.Background(), config_pool)
+	}
 	if err != nil {
 		ipc.SendAudit(fmt.Sprintf("Unable to connect to database: %v\n", err))
 		log.Fatalf("Unable to connect to database: %v\n", err)

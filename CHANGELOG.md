@@ -2,7 +2,21 @@
 
 All notable changes to the Transformation Layer will be documented in this file.
 
-## [v0.16.1] - 2026-08-29
+## [v0.17.0] - 2026-08-29
+
+### Added
+
+- **Admin Interface: Transformation Rules Management**
+  - **`/admin/transformation`**: Added a comprehensive page to view, add, edit, and delete transformation rules.
+  - **Rule Preview**: Real-time preview of transformations using sample data directly from the UI.
+  - **Validation Feedback**: Immediate visual feedback on rule validity (e.g., valid regex, type compatibility).
+- **Admin Interface: Transformation Errors**
+  - **`/admin/transformation/errors_bin`**: Fixed the 500 error and added a "Resolve" button to retry failed records.
+- **API: Transformation Rules Management**
+  - **`POST /admin/transformation/rule`**: Create new transformation rule.
+  - **`PUT /admin/transformation/rule/{id}`**: Update existing rule.
+  - **`DELETE /admin/transformation/rule/{id}`**: Delete rule.
+  - **`GET /admin/transformation/rule/{id}/preview`**: Get preview of a transformation rule.
 
 ### Changed
 
