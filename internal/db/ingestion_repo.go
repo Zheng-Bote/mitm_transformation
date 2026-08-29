@@ -90,8 +90,12 @@ func (r *IngestionRepo) ClaimAggregatedFragments(ctx context.Context, topic stri
 	queryClaim := `
 		UPDATE raw_ingestion
 		SET status = 'processing', processed_at = NOW()
-		WHERE correlation_id = ANY($1) AND topic = $2 AND status = 'pending'
-		RETURNING id::text, topic, correlation_id::text, payload, nonce, dek_id::text
+		FROM storage_keys
+		WHERE raw_ingestion.correlation_id = ANY($1) 
+		  AND raw_ingestion.topic = $2 
+		  AND raw_ingestion.status = 'pending'
+		  AND raw_ingestion.dek_id = storage_keys.id
+		RETURNING raw_ingestion.id::text, raw_ingestion.topic, raw_ingestion.correlation_id::text, raw_ingestion.payload, raw_ingestion.nonce, raw_ingestion.dek_id::text, storage_keys.wrapped_key
 	`
 	claimRows, err := r.pool.Query(ctx, queryClaim, correlationIDs, topic)
 	if err != nil {
@@ -104,12 +108,7 @@ func (r *IngestionRepo) ClaimAggregatedFragments(ctx context.Context, topic stri
 	for claimRows.Next() {
 		var f RawFragment
 		var cid string
-		if err := claimRows.Scan(&f.ID, &f.Topic, &cid, &f.Payload, &f.Nonce, &f.DekID); err != nil {
-			return nil, err
-		}
-
-		err := r.pool.QueryRow(ctx, "SELECT wrapped_key FROM storage_keys WHERE id = $1", f.DekID).Scan(&f.WrappedKey)
-		if err != nil {
+		if err := claimRows.Scan(&f.ID, &f.Topic, &cid, &f.Payload, &f.Nonce, &f.DekID, &f.WrappedKey); err != nil {
 			return nil, err
 		}
 

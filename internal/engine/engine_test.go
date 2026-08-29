@@ -42,6 +42,8 @@ func TestProcessPayload(t *testing.T) {
 				SourceField:         "FName",
 				TransformationChain: json.RawMessage(`[{"name": "trim_whitespace", "parameters": {}}]`),
 				ValidationChain:     json.RawMessage(`[{"name": "not_null", "parameters": {}}]`),
+				ParsedTransformations: []db.RuleStep{{Name: "trim_whitespace"}},
+				ParsedValidations:     []db.RuleStep{{Name: "not_null"}},
 			},
 			{
 				SourceID:            "src-1",
@@ -49,6 +51,8 @@ func TestProcessPayload(t *testing.T) {
 				SourceField:         "Mail",
 				TransformationChain: json.RawMessage(`[{"name": "to_lower", "parameters": {}}]`),
 				ValidationChain:     json.RawMessage(`[{"name": "email", "parameters": {}}]`),
+				ParsedTransformations: []db.RuleStep{{Name: "to_lower"}},
+				ParsedValidations:     []db.RuleStep{{Name: "email"}},
 			},
 		},
 	}
@@ -92,6 +96,7 @@ func TestProcessPayloadValidationError(t *testing.T) {
 				TargetFieldID:   "tf-1",
 				SourceField:     "Mail",
 				ValidationChain: json.RawMessage(`[{"name": "email", "parameters": {}}]`),
+				ParsedValidations: []db.RuleStep{{Name: "email"}},
 			},
 		},
 	}

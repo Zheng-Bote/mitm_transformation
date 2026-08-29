@@ -2,6 +2,14 @@
 
 All notable changes to the Transformation Layer will be documented in this file.
 
+## [v0.16.1] - 2026-08-29
+
+### Changed
+
+- **Performance Optimization**: Removed the expensive `COUNT(*)` query on `raw_ingestion` during job initialization. The job now starts immediately instead of performing a full table scan.
+- **Performance Optimization**: Fixed an N+1 query issue in `ClaimAggregatedFragments`. The `wrapped_key` is now fetched directly via a `JOIN` on `storage_keys` within the `UPDATE ... RETURNING` batch statement, saving thousands of sequential round trips.
+- **Performance Optimization**: Pre-parsed `TransformationChain` and `ValidationChain` JSON structures directly into the cached `MappingRule` struct. This eliminates thousands of redundant `json.Unmarshal` calls for every payload field during processing, significantly reducing CPU usage and GC pressure.
+
 ## [v0.16.0] - 2026-08-26
 
 ### Fixed

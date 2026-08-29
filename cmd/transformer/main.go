@@ -30,7 +30,7 @@ import (
 var (
 	appName        = "Transformation Engine"
 	appDescription = "Applies mapping rules and transformations to data"
-	version        = "0.15.0"
+	version        = "0.16.1"
 )
 
 // IPCClient is used to send events to the scheduler
@@ -294,27 +294,16 @@ func main() {
 		}
 	}
 
-	// Find total number of records to process
-	var totalRecords int
-	countQuery := `
-		WITH ready_groups AS (
-			SELECT correlation_id
-			FROM raw_ingestion
-			WHERE topic = $1 AND status = 'pending' AND correlation_id IS NOT NULL
-			GROUP BY correlation_id
-			HAVING COUNT(DISTINCT source_system) >= $2
-		)
-		SELECT COUNT(*) FROM ready_groups
-	`
-	_ = pool.QueryRow(context.Background(), countQuery, jobArgs.Topic, len(jobArgs.RequiredSources)).Scan(&totalRecords)
-
-	reportInterval := int32(totalRecords / 10)
+	// Total records count is expensive to calculate upfront and causes significant startup delays.
+	// We default to 0 and use batch size for reporting intervals.
+	var totalRecords int = 0
+	reportInterval := int32(jobArgs.BatchSize / 10)
 	if reportInterval <= 0 {
-		reportInterval = 10
+		reportInterval = 50
 	}
 
 	if logAudit != nil {
-		logAudit(fmt.Sprintf("Total records to process: %d (Reporting every %d records, 10%%)", totalRecords, reportInterval))
+		logAudit(fmt.Sprintf("Starting batch job processing (Reporting every %d records)", reportInterval))
 	}
 
 	// Metrics

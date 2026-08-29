@@ -46,16 +46,24 @@ type MappingTargetField struct {
 	Version    int
 }
 
+// RuleStep represents a single step in a transformation or validation chain.
+type RuleStep struct {
+	Name       string                 `json:"name"`
+	Parameters map[string]interface{} `json:"parameters"`
+}
+
 // MappingRule represents a single rule to map and transform a source field to a target field.
 type MappingRule struct {
-	ID                  string
-	SourceID            string
-	TargetFieldID       string
-	SourceField         string
-	Priority            int
-	TransformationChain json.RawMessage
-	ValidationChain     json.RawMessage
-	Version             int
+	ID                    string
+	SourceID              string
+	TargetFieldID         string
+	SourceField           string
+	Priority              int
+	TransformationChain   json.RawMessage
+	ValidationChain       json.RawMessage
+	ParsedTransformations []RuleStep
+	ParsedValidations     []RuleStep
+	Version               int
 }
 
 // RuleSet holds the in-memory cached configuration of sources, targets, and rules.
@@ -164,6 +172,14 @@ func (r *MappingRepo) fetchRules(ctx context.Context) ([]MappingRule, error) {
 		if err := rows.Scan(&rule.ID, &rule.SourceID, &rule.TargetFieldID, &rule.SourceField, &rule.Priority, &rule.TransformationChain, &rule.ValidationChain, &rule.Version); err != nil {
 			return nil, err
 		}
+		
+		if len(rule.TransformationChain) > 0 && string(rule.TransformationChain) != "null" {
+			_ = json.Unmarshal(rule.TransformationChain, &rule.ParsedTransformations)
+		}
+		if len(rule.ValidationChain) > 0 && string(rule.ValidationChain) != "null" {
+			_ = json.Unmarshal(rule.ValidationChain, &rule.ParsedValidations)
+		}
+		
 		rules = append(rules, rule)
 	}
 	return rules, rows.Err()

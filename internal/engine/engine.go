@@ -18,7 +18,6 @@
 package engine
 
 import (
-	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -91,7 +90,7 @@ func (p *PipelineEngine) ProcessPayload(payload map[string]interface{}, sourceID
 		}
 
 		// Apply Transformations
-		transformedVal, transformErr := p.applyTransformations(val, rule.TransformationChain)
+		transformedVal, transformErr := p.applyTransformations(val, rule.ParsedTransformations)
 		if transformErr != nil {
 			errors = append(errors, PipelineError{
 				FailedField:  rule.SourceField,
@@ -102,7 +101,7 @@ func (p *PipelineEngine) ProcessPayload(payload map[string]interface{}, sourceID
 		}
 
 		// Apply Validations
-		valid, validateErr := p.applyValidations(transformedVal, rule.ValidationChain)
+		valid, validateErr := p.applyValidations(transformedVal, rule.ParsedValidations)
 		if !valid || validateErr != nil {
 			errMsg := "validation failed"
 			if validateErr != nil {
@@ -182,17 +181,9 @@ func (p *PipelineEngine) ProcessPayload(payload map[string]interface{}, sourceID
 	return result, errors
 }
 
-func (p *PipelineEngine) applyTransformations(val interface{}, chainRaw json.RawMessage) (interface{}, error) {
-	if len(chainRaw) == 0 || string(chainRaw) == "null" {
+func (p *PipelineEngine) applyTransformations(val interface{}, chain []db.RuleStep) (interface{}, error) {
+	if len(chain) == 0 {
 		return val, nil
-	}
-
-	var chain []struct {
-		Name       string                 `json:"name"`
-		Parameters map[string]interface{} `json:"parameters"`
-	}
-	if err := json.Unmarshal(chainRaw, &chain); err != nil {
-		return val, fmt.Errorf("invalid transformation chain: %w", err)
 	}
 
 	currentVal := val
@@ -212,17 +203,9 @@ func (p *PipelineEngine) applyTransformations(val interface{}, chainRaw json.Raw
 	return currentVal, nil
 }
 
-func (p *PipelineEngine) applyValidations(val interface{}, chainRaw json.RawMessage) (bool, error) {
-	if len(chainRaw) == 0 || string(chainRaw) == "null" {
+func (p *PipelineEngine) applyValidations(val interface{}, chain []db.RuleStep) (bool, error) {
+	if len(chain) == 0 {
 		return true, nil
-	}
-
-	var chain []struct {
-		Name       string                 `json:"name"`
-		Parameters map[string]interface{} `json:"parameters"`
-	}
-	if err := json.Unmarshal(chainRaw, &chain); err != nil {
-		return false, fmt.Errorf("invalid validation chain: %w", err)
 	}
 
 	for _, step := range chain {
