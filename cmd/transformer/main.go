@@ -31,7 +31,7 @@ import (
 var (
 	appName        = "Transformation Engine"
 	appDescription = "Applies mapping rules and transformations to data"
-	version        = "0.16.1"
+	version        = "0.18.0"
 )
 
 // IPCClient is used to send events to the scheduler

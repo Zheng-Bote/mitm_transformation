@@ -2,6 +2,12 @@
 
 All notable changes to the Transformation Layer will be documented in this file.
 
+## [v0.18.0] - 2026-08-31
+
+### Added
+
+- **IPC Socket as Credential Broker**: The transformation engine now fetches database credentials and the master key at runtime from the Scheduler via a Unix Domain Socket request (`get_credentials` with `RUN_ID` and `SCHEDULER_SOCKET_PATH`), instead of holding them locally.
+
 ## [v0.17.0] - 2026-08-29
 
 ### Added
