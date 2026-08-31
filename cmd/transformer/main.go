@@ -31,7 +31,7 @@ import (
 var (
 	appName        = "Transformation Engine"
 	appDescription = "Applies mapping rules and transformations to data"
-	version        = "0.18.0"
+	version        = "0.18.1"
 )
 
 // IPCClient is used to send events to the scheduler
@@ -318,10 +318,10 @@ func main() {
 
 	// Total records count is expensive to calculate upfront and causes significant startup delays.
 	// We default to 0 and use batch size for reporting intervals.
-	var totalRecords int = 0
-	reportInterval := int32(jobArgs.BatchSize / 10)
+	//var totalRecords int = 0
+	reportInterval := int32(jobArgs.BatchSize)
 	if reportInterval <= 0 {
-		reportInterval = 50
+		reportInterval = 500
 	}
 
 	if logAudit != nil {
@@ -334,10 +334,10 @@ func main() {
 	// Define reportProgress
 	reportProgress := func(processed int32) {
 		var percent int
-		if totalRecords > 0 {
-			percent = int((int64(processed) * 100) / int64(totalRecords))
-		}
-		msg := fmt.Sprintf("Progress: %d records processed (approx. %d%%)...", processed, percent)
+		//if totalRecords > 0 {
+		//percent = int((int64(processed) * 100) / int64(totalRecords))
+		//}
+		msg := fmt.Sprintf("Progress: %d records processed", processed)
 		log.Printf("AUDIT: %s", msg)
 		if ipc != nil {
 			ipc.SendAudit(msg)
@@ -385,6 +385,10 @@ dispatcherLoop:
 	wg.Wait()
 
 	processed := stats.Processed.Load()
+	if processed > 0 && processed%reportInterval != 0 {
+		reportProgress(processed)
+	}
+
 	transformed := stats.Transformed.Load()
 	validated := stats.Validated.Load()
 	failed := stats.Failed.Load()
@@ -528,12 +532,12 @@ func fetchCredentialsFromScheduler() (string, string, error) {
 	if runIDStr == "" || socketPath == "" {
 		return "", "", fmt.Errorf("not running under scheduler")
 	}
-	
+
 	runID, err := strconv.Atoi(runIDStr)
 	if err != nil {
 		return "", "", err
 	}
-	
+
 	conn, err := net.Dial("unix", socketPath)
 	if err != nil {
 		return "", "", err

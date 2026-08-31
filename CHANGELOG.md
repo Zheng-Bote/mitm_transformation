@@ -2,6 +2,12 @@
 
 All notable changes to the Transformation Layer will be documented in this file.
 
+## [v0.18.1] - 2026-08-31
+
+### Changed
+
+- **Job Audit Logging**: Reduced the granularity of Job Audit logging for progress reports. Progress is now reported exactly every `batch_size` interval (default: 500) and once for the remaining smaller batch at the end of the job, significantly reducing the volume of log messages.
+
 ## [v0.18.0] - 2026-08-31
 
 ### Added
