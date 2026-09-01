@@ -100,6 +100,7 @@ type DBConnectionConfig struct {
 	User     string `json:"user"`
 	Password string `json:"password"`
 	Database string `json:"database"`
+	SSLMode  string `json:"sslmode"`
 }
 
 type DBConfig struct {
@@ -163,6 +164,9 @@ func main() {
 	if jsonConfig != "" {
 		if err := json.Unmarshal([]byte(jsonConfig), &dbCfg); err != nil {
 			log.Fatalf("Failed to parse DB config from MITM_DB_CONFIG_JSON: %v", err)
+		}
+		if dbCfg.DB.SSLMode != "" {
+			os.Setenv("MITM_DB_SSLMODE", dbCfg.DB.SSLMode)
 		}
 		configSource = "JSON Config (MITM_DB_CONFIG_JSON)"
 	} else {
