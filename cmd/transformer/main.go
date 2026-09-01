@@ -31,7 +31,7 @@ import (
 var (
 	appName        = "Transformation Engine"
 	appDescription = "Applies mapping rules and transformations to data"
-	version        = "0.18.2"
+	version        = "0.18.3"
 )
 
 // IPCClient is used to send events to the scheduler
@@ -100,7 +100,7 @@ type DBConnectionConfig struct {
 	User     string `json:"user"`
 	Password string `json:"password"`
 	Database string `json:"database"`
-	SSLMode  string `json:"sslmode"`
+	SSLMode  bool   `json:"sslmode"`
 }
 
 type DBConfig struct {
@@ -165,8 +165,10 @@ func main() {
 		if err := json.Unmarshal([]byte(jsonConfig), &dbCfg); err != nil {
 			log.Fatalf("Failed to parse DB config from MITM_DB_CONFIG_JSON: %v", err)
 		}
-		if dbCfg.DB.SSLMode != "" {
-			os.Setenv("MITM_DB_SSLMODE", dbCfg.DB.SSLMode)
+		if dbCfg.DB.SSLMode {
+			os.Setenv("MITM_DB_SSLMODE", "require")
+		} else {
+			os.Setenv("MITM_DB_SSLMODE", "disable")
 		}
 		configSource = "JSON Config (MITM_DB_CONFIG_JSON)"
 	} else {

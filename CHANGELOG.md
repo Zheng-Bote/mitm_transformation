@@ -2,6 +2,12 @@
 
 All notable changes to the Transformation Layer will be documented in this file.
 
+## [v0.18.3] - 2026-09-01
+
+### Fixed
+
+- **IPC SSLMode Type Fix**: Changed `SSLMode` field in JSON parsing struct from `string` to `bool` to correctly unmarshal boolean values (`true`/`false`) sent by the scheduler.
+
 ## [v0.18.2] - 2026-09-01
 
 ### Fixed
