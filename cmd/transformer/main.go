@@ -31,7 +31,7 @@ import (
 var (
 	appName        = "Transformation Engine"
 	appDescription = "Applies mapping rules and transformations to data"
-	version        = "0.18.3"
+	version        = "0.18.4"
 )
 
 // IPCClient is used to send events to the scheduler
@@ -225,8 +225,15 @@ func main() {
 
 	// 1. Connect to Database
 	sslMode := "disable"
-	if os.Getenv("MITM_DB_SSLMODE") == "true" {
-		sslMode = "require"
+	envSSLMode := os.Getenv("MITM_DB_SSLMODE")
+	if envSSLMode != "" {
+		if envSSLMode == "true" {
+			sslMode = "require"
+		} else if envSSLMode == "false" {
+			sslMode = "disable"
+		} else {
+			sslMode = envSSLMode
+		}
 	}
 	connString := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=%s", dbCfg.DB.User, dbCfg.DB.Password, dbCfg.DB.Host, dbCfg.DB.Port, dbCfg.DB.Database, sslMode)
 	config_pool, err := pgxpool.ParseConfig(connString)
