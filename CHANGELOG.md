@@ -2,6 +2,11 @@
 
 All notable changes to the Transformation Layer will be documented in this file.
 
+## [v0.19.0] - 2026-09-09
+
+### Changed
+- **Performance:** Dynamic Database Connection Pool Scaling (Issue #4). `MaxConns` is now dynamically calculated based on the configured worker count (`jobArgs.Workers + 5`) instead of being statically limited to 20, preventing bottlenecks in high-throughput topics.
+
 ## [v0.18.4] - 2026-09-01
 
 ### Fixed
