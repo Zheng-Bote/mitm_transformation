@@ -20,7 +20,7 @@ go build -o bin/mitm-transformer ./cmd/transformer/main.go
 The batch job expects database credentials via environment variables and optional job configuration as a JSON argument (`os.Args[1]`), exactly as passed by the `mitm_scheduler`.
 
 ```bash
-# 1. DB Config via JSON (Preferred)
+# DB Config via IPC (Preferred) or JSON/Env (Fallback)
 export MITM_DB_CONFIG_JSON='{"db":{"host":"192.168.0.31","port":6543,"user":"mitm_user","password":"...","database":"mitm"}}'
 
 # Or via Direct Environment Variables (Fallback)
