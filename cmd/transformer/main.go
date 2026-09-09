@@ -31,7 +31,7 @@ import (
 var (
 	appName        = "Transformation Engine"
 	appDescription = "Applies mapping rules and transformations to data"
-	version        = "0.18.4"
+	version        = "0.19.0"
 )
 
 // IPCClient is used to send events to the scheduler
@@ -238,7 +238,7 @@ func main() {
 	connString := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=%s", dbCfg.DB.User, dbCfg.DB.Password, dbCfg.DB.Host, dbCfg.DB.Port, dbCfg.DB.Database, sslMode)
 	config_pool, err := pgxpool.ParseConfig(connString)
 	if err == nil {
-		config_pool.MaxConns = 20
+		config_pool.MaxConns = int32(jobArgs.Workers + 5)
 		config_pool.MaxConnIdleTime = 5 * time.Minute
 		config_pool.MaxConnLifetime = 1 * time.Hour
 	}
