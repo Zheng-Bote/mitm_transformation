@@ -10,6 +10,12 @@ assignees: ""
 
 _Describe what the feature does and why it is needed. Keep it concise._
 
+## Requirements (EARS Syntax)
+
+1. _Text_
+2. _Text_
+3. _Text_
+
 ## Scope
 
 _What components (Collectors, Transformation, Delivery) does this affect?_
@@ -26,5 +32,6 @@ Please confirm that this feature respects the global `mitm-2` constraints define
 
 ## Acceptance Criteria
 
-- [ ] Criterion 1
-- [ ] Criterion 2
+- [ ] _Criterion 1_
+- [ ] _Criterion 2_
+- [ ] CHANGELOG.md and README.md are up-to-date
