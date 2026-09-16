@@ -1,18 +1,19 @@
 # MitM Transformation Layer (CLI Batch Job)
 
-This directory contains the Go implementation of the MitM Transformation Layer, built as a robust CLI application.
+This directory contains the Rust implementation of the MitM Transformation Layer, built as a robust CLI application.
 
 ## Overview
 
 The Transformation Layer acts as a **Stateful Aggregator**. It pulls data from the `raw_ingestion` table, waits until all required source fragments for a given `correlation_id` have arrived, and merges them into a single Golden Record. It then applies mapping rules (transformation and validation pipelines dynamically sourced from PostgreSQL), encrypts sensitive target fields using AES-256 GCM, and writes the results to the `target_fragments` table. If validation fails, the payload is pushed to a Dead Letter Queue (DLQ) in the `transformation_errors` table.
 
-This module is designed as a **Scheduled Batch Job** rather than a continuous daemon. It processes all aggregated groups concurrently via a Go Worker Pool and terminates successfully when the queue is empty.
+This module is designed as a **Scheduled Batch Job** rather than a continuous daemon. It processes all aggregated groups concurrently via Tokio async workers and terminates successfully when the queue is empty.
 
 ## Building
 
-To build the executable, run:
+To build the executable statically, run:
 ```bash
-go build -o bin/mitm-transformer ./cmd/transformer/main.go
+cargo build --release --target x86_64-unknown-linux-musl
+cp target/x86_64-unknown-linux-musl/release/mitm_transformation ../../bin/
 ```
 
 ## Usage

@@ -2,6 +2,11 @@
 
 All notable changes to the Transformation Layer will be documented in this file.
 
+## [v0.20.0] - 2026-09-16
+
+### Changed
+- **Architecture:** Completely rewritten in Rust using `tokio` async workers. `go build` replaced with `cargo build`.
+
 ## [v0.19.0] - 2026-09-09
 
 ### Changed
